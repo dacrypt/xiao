@@ -1,0 +1,104 @@
+[project]
+name = "xiao"
+version = "0.1.0"
+description = "CLI tool and web dashboard to control Xiaomi/Roborock robot vacuums via cloud API"
+readme = "README.md"
+license = { file = "LICENSE" }
+requires-python = ">=3.12"
+authors = [{ name = "David Dacrypt" }]
+keywords = ["xiaomi", "roborock", "vacuum", "miot", "cli", "dashboard", "smart-home", "iot"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Environment :: Console",
+    "Environment :: Web Environment",
+    "Framework :: FastAPI",
+    "Intended Audience :: Developers",
+    "Intended Audience :: End Users/Desktop",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Home Automation",
+    "Typing :: Typed",
+]
+dependencies = [
+    "python-miio>=0.5.0",
+    "micloud>=0.5",
+    "typer>=0.15.0",
+    "rich>=13.0.0",
+    "platformdirs>=4.0.0",
+    "tomli-w>=1.0.0",
+    "playwright>=1.58.0",
+    "websocket-client>=1.0.0",
+    "pillow>=12.1.1",
+    "pytesseract>=0.3.13",
+    "ddddocr>=1.6.1",
+    "requests>=2.28.0",
+    "fastapi>=0.135.2",
+    "uvicorn[standard]>=0.42.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/dacrypt/xiao"
+Repository = "https://github.com/dacrypt/xiao"
+Issues = "https://github.com/dacrypt/xiao/issues"
+Changelog = "https://github.com/dacrypt/xiao/blob/main/CHANGELOG.md"
+
+[project.scripts]
+xiao = "xiao.cli.app:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/xiao"]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.0",
+    "ruff>=0.8.0",
+    "mypy>=1.13.0",
+]
+
+[tool.ruff]
+target-version = "py312"
+line-length = 120
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = [
+    "E",     # pycodestyle errors
+    "W",     # pycodestyle warnings
+    "F",     # pyflakes
+    "I",     # isort
+    "N",     # pep8-naming
+    "UP",    # pyupgrade
+    "B",     # flake8-bugbear
+    "SIM",   # flake8-simplify
+    "TCH",   # flake8-type-checking
+    "RUF",   # ruff-specific
+]
+ignore = [
+    "E501",    # line too long (handled by formatter)
+    "E402",    # module-level import not at top (intentional lazy imports)
+    "B008",    # do not perform function calls in argument defaults (typer uses this)
+    "SIM108",  # ternary operator (readability preference)
+    "RUF001",  # ambiguous unicode (Spanish room names)
+    "RUF012",  # mutable class variable defaults (pydantic models)
+]
+
+[tool.ruff.lint.isort]
+known-first-party = ["xiao"]
+
+[tool.mypy]
+python_version = "3.12"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = false
+check_untyped_defs = true
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
