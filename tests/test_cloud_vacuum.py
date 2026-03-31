@@ -25,22 +25,26 @@ def vacuum(mock_cloud):
 
 class TestCloudVacuumStatus:
     def test_status_parsing(self, vacuum):
-        """Test that status correctly parses cloud property responses."""
+        """Test that status correctly parses cloud property responses.
+
+        MIoT spec for c102gl:
+          siid 2 piid 1 = status
+          siid 2 piid 2 = fault (read-only, 0-255) — NOT fan speed
+          siid 2 piid 3 = mode (0=Silent, 1=Basic, 2=Strong, 3=Full Speed) = fan speed
+          siid 2 piid 5 = dry-left-time (minutes)
+        """
         mock_results = [
-            {"siid": 2, "piid": 1, "code": 0, "value": 5},  # Charging
+            {"siid": 2, "piid": 1, "code": 0, "value": 5},   # status = Go Charging
             {"siid": 3, "piid": 1, "code": 0, "value": 85},  # Battery 85%
-            {"siid": 3, "piid": 2, "code": 0, "value": 1},  # Charging
-            {"siid": 2, "piid": 2, "code": 0, "value": 1},  # Standard fan
-            {"siid": 2, "piid": 3, "code": 0, "value": 2},  # Sweep & Mop
-            {"siid": 2, "piid": 5, "code": 0, "value": 0},  # sweep_type
+            {"siid": 3, "piid": 2, "code": 0, "value": 1},   # Charging state
+            {"siid": 2, "piid": 3, "code": 0, "value": 1},   # mode = Basic/Standard (fan speed)
         ]
         with patch("xiao.core.cloud_vacuum.cloud_get_properties", return_value=mock_results):
             data = vacuum.status()
         assert data["state"] == "Go Charging"
         assert data["battery"] == 85
         assert data["charging"] == "Charging"
-        assert data["fan_speed"] == "Standard"
-        assert data["mode"] == "Sweep & Mop"
+        assert data["fan_speed"] == "standard"
 
     def test_status_skips_errors(self, vacuum):
         """Properties with non-zero code are skipped."""
@@ -53,14 +57,16 @@ class TestCloudVacuumStatus:
         assert "state" not in data
         assert data["battery"] == 50
 
-    def test_status_high_fan_percentage(self, vacuum):
-        """Fan level > 3 maps to percentage-based name."""
+    def test_status_fault_code_not_fan(self, vacuum):
+        """siid 2 piid 2 is device fault (read-only), not fan speed. Status should NOT map it to fan."""
         mock_results = [
-            {"siid": 2, "piid": 2, "code": 0, "value": 80},
+            {"siid": 2, "piid": 2, "code": 0, "value": 80},  # fault code 80 — some error
         ]
         with patch("xiao.core.cloud_vacuum.cloud_get_properties", return_value=mock_results):
             data = vacuum.status()
-        assert "Turbo" in data["fan_speed"]
+        # fan_speed should NOT appear for piid=2 data
+        assert "fan_speed" not in data, \
+            "siid 2 piid 2 is device fault, not fan speed — should not populate fan_speed"
 
 
 class TestCloudVacuumConsumables:
@@ -154,16 +160,40 @@ class TestCloudVacuumHistory:
 
 
 class TestCloudVacuumFanSpeed:
+    # According to official MIoT spec for xiaomi.vacuum.c102gl:
+    # siid 2, piid 2 = 'fault' (read-only, uint8 0-255) — NOT fan speed
+    # siid 2, piid 3 = 'mode' (0=Silent, 1=Basic, 2=Strong, 3=Full Speed) — this IS fan speed
+
+    def test_fan_speed_reads_from_siid2_piid3_not_piid2(self, vacuum):
+        """fan_speed() must read from siid=2 piid=3 (mode), not piid=2 (fault)."""
+        mock_results = [{"siid": 2, "piid": 3, "code": 0, "value": 1}]
+        with patch("xiao.core.cloud_vacuum.cloud_get_properties", return_value=mock_results) as mock_get:
+            speed = vacuum.fan_speed()
+        # Verify it queried piid=3
+        called_props = mock_get.call_args[0][2]  # third positional arg = props list
+        assert any(p.get("piid") == 3 for p in called_props), "fan_speed() should read piid=3 (mode), not piid=2 (fault)"
+        assert speed == "standard"
+
     def test_fan_speed_named(self, vacuum):
-        mock_results = [{"siid": 2, "piid": 2, "code": 0, "value": 1}]
+        mock_results = [{"siid": 2, "piid": 3, "code": 0, "value": 1}]
         with patch("xiao.core.cloud_vacuum.cloud_get_properties", return_value=mock_results):
             assert vacuum.fan_speed() == "standard"
 
-    def test_fan_speed_percentage(self, vacuum):
-        mock_results = [{"siid": 2, "piid": 2, "code": 0, "value": 60}]
-        with patch("xiao.core.cloud_vacuum.cloud_get_properties", return_value=mock_results):
-            speed = vacuum.fan_speed()
-            assert "Medium" in speed
+    def test_fan_speed_all_named_values(self, vacuum):
+        """Verify all 4 official MIoT mode values decode correctly."""
+        cases = [(0, "silent"), (1, "standard"), (2, "medium"), (3, "turbo")]
+        for val, expected in cases:
+            mock_results = [{"siid": 2, "piid": 3, "code": 0, "value": val}]
+            with patch("xiao.core.cloud_vacuum.cloud_get_properties", return_value=mock_results):
+                assert vacuum.fan_speed() == expected, f"value={val} should map to '{expected}'"
+
+    def test_set_fan_speed_writes_to_siid2_piid3(self, vacuum):
+        """set_fan_speed() must write to siid=2 piid=3 (mode), not piid=2 (fault)."""
+        with patch("xiao.core.cloud_vacuum.cloud_set_properties", return_value=[{"code": 0}]) as mock_set:
+            vacuum.set_fan_speed("turbo")
+        called_props = mock_set.call_args[0][2]  # third positional arg = props list
+        assert any(p.get("piid") == 3 for p in called_props), "set_fan_speed() should write piid=3 (mode), not piid=2 (fault)"
+        assert all(p.get("piid") != 2 for p in called_props), "set_fan_speed() must NOT write to piid=2 (fault — read-only!)"
 
     def test_set_fan_speed_valid(self, vacuum):
         with patch("xiao.core.cloud_vacuum.cloud_set_properties", return_value=[{"code": 0}]) as mock:
@@ -173,6 +203,19 @@ class TestCloudVacuumFanSpeed:
     def test_set_fan_speed_invalid(self, vacuum):
         with pytest.raises(ValueError, match="Unknown speed"):
             vacuum.set_fan_speed("ultramax")
+
+    def test_status_fan_speed_reads_from_piid3(self, vacuum):
+        """status() fan_speed parsing must come from siid=2 piid=3 (mode), not piid=2 (fault)."""
+        mock_results = [
+            {"siid": 2, "piid": 1, "code": 0, "value": 6},   # status = Charging
+            {"siid": 2, "piid": 3, "code": 0, "value": 2},   # mode (fan) = Medium/Strong
+        ]
+        with patch("xiao.core.cloud_vacuum.cloud_get_properties", return_value=mock_results):
+            data = vacuum.status()
+        # siid 2, piid 3, value=2 should be "Medium" or "Strong" fan speed
+        assert "fan_speed" in data, "status() should include fan_speed from piid=3"
+        assert data["fan_speed"] in ("medium", "Medium", "Strong", "strong"), \
+            f"value=2 should decode to medium/strong, got: {data['fan_speed']}"
 
 
 class TestCloudVacuumVolume:

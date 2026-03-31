@@ -36,9 +36,9 @@ logger = logging.getLogger(__name__)
 MIOT_SPEC = {
     # siid 2 = sweep
     "sweep_status": {"siid": 2, "piid": 1},  # Status enum
-    "fan_level": {"siid": 2, "piid": 2},  # Fan speed level
-    "sweep_mode": {"siid": 2, "piid": 3},  # Mode
-    "sweep_type": {"siid": 2, "piid": 5},  # Sweep type
+    "fault_code": {"siid": 2, "piid": 2},   # Device Fault (read-only, uint8 0-255) — NOT fan speed
+    "fan_level": {"siid": 2, "piid": 3},    # Mode / fan speed (0=Silent, 1=Basic, 2=Strong, 3=Full Speed)
+    "dry_left_time": {"siid": 2, "piid": 5},  # Dry Left Time (minutes, read-only)
     # siid 3 = battery
     "battery_level": {"siid": 3, "piid": 1},  # Battery percentage
     "charging_state": {"siid": 3, "piid": 2},  # Charging state
@@ -129,20 +129,29 @@ class CloudVacuumService:
     # ── Status ────────────────────────────────────────────────────
 
     def status(self) -> dict[str, Any]:
-        """Get vacuum status via cloud properties."""
+        """Get vacuum status via cloud properties.
+
+        MIoT spec for xiaomi.vacuum.c102gl:
+          siid 2 piid 1 = status enum (1=Sweeping...23=RemoteClean)
+          siid 2 piid 2 = fault (read-only, uint8 0-255) — stored as fault_code
+          siid 2 piid 3 = mode / fan speed (0=Silent, 1=Basic, 2=Strong, 3=Full Speed)
+          siid 2 piid 5 = dry-left-time (minutes, read-only)
+          siid 3 piid 1 = battery level (%)
+          siid 3 piid 2 = charging state (1=Charging, 2=Not Charging, 5=Go Charging)
+        """
         props_to_get = [
             MIOT_SPEC["sweep_status"],
+            MIOT_SPEC["fault_code"],
+            MIOT_SPEC["fan_level"],
+            MIOT_SPEC["dry_left_time"],
             MIOT_SPEC["battery_level"],
             MIOT_SPEC["charging_state"],
-            MIOT_SPEC["fan_level"],
-            MIOT_SPEC["sweep_mode"],
-            MIOT_SPEC["sweep_type"],
         ]
 
         results = cloud_get_properties(self.cloud, self.did, props_to_get, country=self.country)
 
         data: dict[str, Any] = {}
-        # Status values discovered from device (value=13 when in dock after cleaning)
+        # Status values from official MIoT spec + observed device values
         status_map = {
             1: "Sweeping",
             2: "Idle",
@@ -163,23 +172,13 @@ class CloudVacuumService:
             22: "Dust Collecting",
             23: "Remote Clean",
         }
-        # Fan speed values from c102gl (X20+)
-        # Device returns raw percentage values for fan_level (siid 2, piid 2)
+        # Fan speed / mode values (siid 2, piid 3) — official MIoT spec
+        # 0=Silent, 1=Basic(Standard), 2=Strong(Medium), 3=Full Speed(Turbo)
         fan_map = {
-            0: "Silent",
-            1: "Standard",
-            2: "Medium",
-            3: "Turbo",
-            101: "Silent",
-            102: "Standard",
-            103: "Medium",
-            104: "Turbo",
-        }
-        mode_map = {
-            0: "Sweep only",
-            1: "Mop only",
-            2: "Sweep & Mop",
-            3: "Custom",
+            0: "silent",
+            1: "standard",
+            2: "medium",
+            3: "turbo",
         }
 
         for r in results:
@@ -194,34 +193,25 @@ class CloudVacuumService:
             if siid == 2 and piid == 1:
                 data["state"] = status_map.get(value, f"Unknown({value})")
             elif siid == 2 and piid == 2:
-                data["fan_level_raw"] = value
-                if value in fan_map:
-                    data["fan_speed"] = fan_map[value]
-                elif isinstance(value, int) and value > 3:
-                    # Raw percentage — map to friendly name
-                    if value <= 30:
-                        data["fan_speed"] = f"Silent ({value}%)"
-                    elif value <= 55:
-                        data["fan_speed"] = f"Standard ({value}%)"
-                    elif value <= 75:
-                        data["fan_speed"] = f"Medium ({value}%)"
-                    else:
-                        data["fan_speed"] = f"Turbo ({value}%)"
-                else:
-                    data["fan_speed"] = str(value)
+                # fault code — store for diagnostics, do NOT map to fan_speed
+                data["fault_code"] = value
             elif siid == 2 and piid == 3:
-                data["mode"] = mode_map.get(value, str(value))
+                # mode = fan speed level
+                data["fan_speed"] = fan_map.get(value, str(value))
             elif siid == 2 and piid == 5:
-                data["sweep_type"] = value
+                data["dry_left_time_min"] = value
             elif siid == 3 and piid == 1:
                 data["battery"] = value
             elif siid == 3 and piid == 2:
-                charging = {1: "Charging", 2: "Not charging", 3: "Charged"}
+                charging = {1: "Charging", 2: "Not charging", 3: "Charged", 5: "Go Charging"}
                 data["charging"] = charging.get(value, str(value))
 
         return data
 
     # ── Fan speed ─────────────────────────────────────────────────
+    # According to official MIoT spec for xiaomi.vacuum.c102gl:
+    #   siid 2, piid 2 = 'fault' (read-only, uint8 0-255) — NOT fan speed
+    #   siid 2, piid 3 = 'mode' (0=Silent, 1=Basic, 2=Strong, 3=Full Speed) = fan speed
 
     FAN_SPEEDS = {"silent": 0, "standard": 1, "medium": 2, "turbo": 3}
     FAN_SPEED_NAMES = {v: k for k, v in FAN_SPEEDS.items()}
@@ -230,10 +220,11 @@ class CloudVacuumService:
         level = self.FAN_SPEEDS.get(preset.lower())
         if level is None:
             raise ValueError(f"Unknown speed: {preset}. Use: {', '.join(self.FAN_SPEEDS)}")
+        # Write to siid=2, piid=3 (mode) — NOT piid=2 (fault, read-only)
         return cloud_set_properties(
             self.cloud,
             self.did,
-            [{"siid": 2, "piid": 2, "value": level}],
+            [{"siid": 2, "piid": 3, "value": level}],
             country=self.country,
         )
 
@@ -241,23 +232,13 @@ class CloudVacuumService:
         results = cloud_get_properties(
             self.cloud,
             self.did,
-            [{"siid": 2, "piid": 2}],
+            [{"siid": 2, "piid": 3}],  # mode property (0=Silent..3=Full Speed)
             country=self.country,
         )
         if results and results[0].get("code", 0) == 0:
             value = results[0].get("value")
             if value in self.FAN_SPEED_NAMES:
                 return self.FAN_SPEED_NAMES[value]
-            # Raw percentage — map to friendly name
-            if isinstance(value, int) and value > 3:
-                if value <= 30:
-                    return f"Silent ({value}%)"
-                elif value <= 55:
-                    return f"Standard ({value}%)"
-                elif value <= 75:
-                    return f"Medium ({value}%)"
-                else:
-                    return f"Turbo ({value}%)"
             return str(value)
         return "unknown"
 
@@ -921,9 +902,9 @@ class CloudVacuumService:
             },
             "status": {
                 "state": data.get("s2_p1", 0),
-                "fault_code": data.get("s2_p2", 0),
-                "sweep_mode": data.get("s2_p3", 0),
-                "sweep_type_or_dry_time": data.get("s2_p5", 0),
+                "fault_code": data.get("s2_p2", 0),          # siid 2 piid 2 = device fault (0-255)
+                "fan_speed_mode": data.get("s2_p3", 0),       # siid 2 piid 3 = mode/fan (0=Silent..3=Full)
+                "dry_left_time_min": data.get("s2_p5", 0),    # siid 2 piid 5 = dry left time (minutes)
             },
             "battery": {
                 "level": data.get("s3_p1", 0),
