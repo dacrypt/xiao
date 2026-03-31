@@ -82,6 +82,11 @@ MIOT_ACTIONS = {
     "start_eject": {"siid": 2, "aiid": 10},  # Eject base station tray
     "start_charge": {"siid": 3, "aiid": 1},  # Return to dock
     "identify": {"siid": 6, "aiid": 1},  # Find/beep (identify service)
+    # Consumable resets
+    "reset_main_brush": {"siid": 9, "aiid": 1},
+    "reset_side_brush": {"siid": 10, "aiid": 1},
+    "reset_filter": {"siid": 11, "aiid": 1},
+    "reset_mop": {"siid": 18, "aiid": 1},
 }
 
 
@@ -478,11 +483,24 @@ class CloudVacuumService:
     # ── Consumable reset ──────────────────────────────────────────
 
     def consumable_reset(self, name: str) -> dict:
+        """Reset a consumable counter. Use after replacing the physical part."""
         action_key = f"reset_{name}"
         if action_key not in MIOT_ACTIONS:
-            raise ValueError(f"Unknown consumable: {name}. Use: main_brush, side_brush, filter")
+            raise ValueError(f"Unknown consumable: {name}. Use: main_brush, side_brush, filter, mop")
         a = MIOT_ACTIONS[action_key]
         return cloud_call_action(self.cloud, self.did, a["siid"], a["aiid"], country=self.country)
+
+    def consumable_reset_all(self) -> dict[str, Any]:
+        """Reset ALL consumable counters."""
+        results = {}
+        for name in ("main_brush", "side_brush", "filter", "mop"):
+            try:
+                r = self.consumable_reset(name)
+                code = r.get("result", {}).get("code", r.get("code", -1))
+                results[name] = {"ok": code == 0, "code": code}
+            except Exception as e:
+                results[name] = {"ok": False, "error": str(e)}
+        return results
 
     # ── Rooms / Map ───────────────────────────────────────────────
 
