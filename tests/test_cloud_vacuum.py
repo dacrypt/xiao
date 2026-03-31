@@ -185,3 +185,64 @@ class TestCloudVacuumVolume:
         with patch("xiao.core.cloud_vacuum.cloud_set_properties", return_value=[{"code": 0}]) as mock:
             vacuum.set_volume(75)
         mock.assert_called_once()
+
+
+class TestCloudVacuumHistoryDisplay:
+    """Tests for human-readable history display fields (fixes dashboard '--' bug)."""
+
+    def test_clean_history_includes_duration_display_hours_and_minutes(self, vacuum):
+        """total_clean_duration (minutes) should produce a human-readable display field."""
+        mock_results = [
+            {"siid": 4, "piid": 1, "code": 0, "value": 130},  # 130 minutes = 2h 10min
+            {"siid": 4, "piid": 2, "code": 0, "value": 5},
+            {"siid": 4, "piid": 3, "code": 0, "value": 25},
+        ]
+        with patch("xiao.core.cloud_vacuum.cloud_get_properties", return_value=mock_results):
+            data = vacuum.clean_history()
+        assert "total_clean_duration_display" in data, "Missing duration display field"
+        assert data["total_clean_duration_display"] == "2h 10min"
+
+    def test_clean_history_duration_display_exact_hours(self, vacuum):
+        """120 minutes = 2h 0min (no fractional confusion)."""
+        mock_results = [
+            {"siid": 4, "piid": 1, "code": 0, "value": 120},
+            {"siid": 4, "piid": 2, "code": 0, "value": 3},
+        ]
+        with patch("xiao.core.cloud_vacuum.cloud_get_properties", return_value=mock_results):
+            data = vacuum.clean_history()
+        assert data["total_clean_duration_display"] == "2h 0min"
+
+    def test_clean_history_duration_display_less_than_one_hour(self, vacuum):
+        """45 minutes should show as '45min', not '0h 45min'."""
+        mock_results = [
+            {"siid": 4, "piid": 1, "code": 0, "value": 45},
+        ]
+        with patch("xiao.core.cloud_vacuum.cloud_get_properties", return_value=mock_results):
+            data = vacuum.clean_history()
+        assert data["total_clean_duration_display"] == "45min"
+
+    def test_clean_history_last_clean_area_formatted(self, vacuum):
+        """last_clean_area from siid 12 piid 2 should be included as m² value."""
+        mock_results = [
+            {"siid": 12, "piid": 1, "code": 0, "value": 1711000000},
+            {"siid": 12, "piid": 2, "code": 0, "value": 35},  # 35 m²
+            {"siid": 12, "piid": 3, "code": 0, "value": 42},  # 42 minutes
+        ]
+        with patch("xiao.core.cloud_vacuum.cloud_get_properties", return_value=mock_results):
+            data = vacuum.clean_history()
+        assert data.get("last_clean_area") == 35
+        # last_clean_duration should also be present
+        assert data.get("last_clean_duration") == 42
+
+    def test_clean_history_zero_count_not_hidden(self, vacuum):
+        """Zero values should be explicitly 0 (not None/missing) so the dashboard can display '0'."""
+        mock_results = [
+            {"siid": 4, "piid": 1, "code": 0, "value": 0},
+            {"siid": 4, "piid": 2, "code": 0, "value": 0},
+            {"siid": 4, "piid": 3, "code": 0, "value": 0},
+        ]
+        with patch("xiao.core.cloud_vacuum.cloud_get_properties", return_value=mock_results):
+            data = vacuum.clean_history()
+        assert data["total_clean_duration"] == 0
+        assert data["total_clean_count"] == 0
+        assert data["total_clean_duration_display"] == "0min"

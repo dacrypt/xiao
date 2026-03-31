@@ -449,6 +449,16 @@ class CloudVacuumService:
         if ts and isinstance(ts, int) and ts > 1_000_000_000:
             data["last_clean_date"] = datetime.fromtimestamp(ts).strftime("%Y-%m-%d %H:%M")
 
+        # Add human-readable duration display (raw value is minutes)
+        # e.g. 130 → "2h 10min", 45 → "45min", 0 → "0min"
+        duration_min = data.get("total_clean_duration")
+        if duration_min is not None:
+            mins = int(duration_min)
+            if mins >= 60:
+                data["total_clean_duration_display"] = f"{mins // 60}h {mins % 60}min"
+            else:
+                data["total_clean_duration_display"] = f"{mins}min"
+
         return data
 
     def last_clean(self) -> dict[str, Any]:

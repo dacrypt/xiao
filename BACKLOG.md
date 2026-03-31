@@ -13,7 +13,6 @@
 ## Improvements Planned
 - 🟠 Token auto-refresh on 401 — detect expired token, auto-refresh via browser CDP, retry command
 - 🟠 Better room cleaning — research if X20+ needs specific clean_param JSON format or a different action sequence
-- 🟠 Dashboard: fix history section displaying "--" for some fields
 - 🟠 Dashboard: clean up lower sections (Audio, Clean Log Raw, All Properties) — too verbose, collapse by default
 - 🔵 Dashboard: add dark/light theme toggle
 - 🔵 CLI: `xiao rooms rename <id> <name>` — interactive room renaming
@@ -41,6 +40,7 @@ Sources: Valetudo, python-miio, hass-xiaomi-miot, r/Xiaomi, r/homeassistant
 - OTA firmware management
 
 ## Completed
+- ✅ Dashboard history section: fixed "--" for zero/falsy values — added `total_clean_duration_display` field to `clean_history()` (e.g. "2h 10min"), fixed JS to use `??` null-coalescing so `0` shows as `0` not `--`, fixed total-time label (was incorrectly appending `h` to a minutes value).
 - ✅ Cloud mode control (all basic actions)
 - ✅ Mission Control dashboard (glassmorphism, real-time)
 - ✅ Water Tank Alert detection (state 21) + auto-reset
