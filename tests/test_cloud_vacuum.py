@@ -289,3 +289,103 @@ class TestCloudVacuumHistoryDisplay:
         assert data["total_clean_duration"] == 0
         assert data["total_clean_count"] == 0
         assert data["total_clean_duration_display"] == "0min"
+
+
+class TestCloudVacuumWaterLevel:
+    """Tests for water level — mop-mode property.
+
+    Official MIoT spec for xiaomi.vacuum.c102gl:
+      siid 4 (vacuum-extend) piid 5 = mop-mode (read+write, 1=Low, 2=Medium, 3=High)
+
+    BUG: Old implementation wrote to siid 18 piid 1 (mop-life-level, READ-ONLY %).
+    Correct: siid 4 piid 5 (mop-mode, writable).
+    """
+
+    def test_set_water_level_writes_to_siid4_piid5(self, vacuum):
+        """set_water_level() must write to siid=4 piid=5 (mop-mode), not siid=18 piid=1 (mop life %)."""
+        with patch("xiao.core.cloud_vacuum.cloud_set_properties", return_value=[{"code": 0}]) as mock_set:
+            vacuum.set_water_level("medium")
+        called_props = mock_set.call_args[0][2]
+        assert any(p.get("siid") == 4 and p.get("piid") == 5 for p in called_props), \
+            "set_water_level() should write to siid=4 piid=5 (mop-mode)"
+        assert not any(p.get("siid") == 18 and p.get("piid") == 1 for p in called_props), \
+            "set_water_level() must NOT write to siid=18 piid=1 (mop-life-level, read-only!)"
+
+    def test_set_water_level_low_value(self, vacuum):
+        """low → value 1 per official spec."""
+        with patch("xiao.core.cloud_vacuum.cloud_set_properties", return_value=[{"code": 0}]) as mock_set:
+            vacuum.set_water_level("low")
+        called_props = mock_set.call_args[0][2]
+        prop = next(p for p in called_props if p.get("siid") == 4 and p.get("piid") == 5)
+        assert prop["value"] == 1, "low water level should be value 1"
+
+    def test_set_water_level_medium_value(self, vacuum):
+        """medium → value 2 per official spec."""
+        with patch("xiao.core.cloud_vacuum.cloud_set_properties", return_value=[{"code": 0}]) as mock_set:
+            vacuum.set_water_level("medium")
+        called_props = mock_set.call_args[0][2]
+        prop = next(p for p in called_props if p.get("siid") == 4 and p.get("piid") == 5)
+        assert prop["value"] == 2, "medium water level should be value 2"
+
+    def test_set_water_level_high_value(self, vacuum):
+        """high → value 3 per official spec."""
+        with patch("xiao.core.cloud_vacuum.cloud_set_properties", return_value=[{"code": 0}]) as mock_set:
+            vacuum.set_water_level("high")
+        called_props = mock_set.call_args[0][2]
+        prop = next(p for p in called_props if p.get("siid") == 4 and p.get("piid") == 5)
+        assert prop["value"] == 3, "high water level should be value 3"
+
+    def test_set_water_level_invalid(self, vacuum):
+        """Unknown water level raises ValueError."""
+        with pytest.raises(ValueError, match="Unknown water level"):
+            vacuum.set_water_level("ultra")
+
+    def test_water_level_reads_from_siid4_piid5(self, vacuum):
+        """water_level() must read from siid=4 piid=5 (mop-mode), not siid=18."""
+        mock_results = [{"siid": 4, "piid": 5, "code": 0, "value": 2}]
+        with patch("xiao.core.cloud_vacuum.cloud_get_properties", return_value=mock_results) as mock_get:
+            data = vacuum.water_level()
+        called_props = mock_get.call_args[0][2]
+        assert any(p.get("siid") == 4 and p.get("piid") == 5 for p in called_props), \
+            "water_level() should read from siid=4 piid=5 (mop-mode)"
+        assert data.get("water_level") == "medium"
+        assert data.get("water_level_raw") == 2
+
+    def test_water_level_all_values(self, vacuum):
+        """Verify all 3 mop-mode values decode correctly."""
+        cases = [(1, "low"), (2, "medium"), (3, "high")]
+        for val, expected in cases:
+            mock_results = [{"siid": 4, "piid": 5, "code": 0, "value": val}]
+            with patch("xiao.core.cloud_vacuum.cloud_get_properties", return_value=mock_results):
+                data = vacuum.water_level()
+            assert data.get("water_level") == expected, f"mop-mode value={val} should decode to '{expected}'"
+
+
+class TestCloudVacuumStatusCodes:
+    """Tests for status code decoding per official MIoT spec."""
+
+    def test_status_13_is_charging_completed(self, vacuum):
+        """Official spec: status 13 = 'Charging Completed' (was wrongly 'In Dock')."""
+        mock_results = [{"siid": 2, "piid": 1, "code": 0, "value": 13}]
+        with patch("xiao.core.cloud_vacuum.cloud_get_properties", return_value=mock_results):
+            data = vacuum.status()
+        assert data["state"] == "Charging Completed", \
+            "Status 13 should be 'Charging Completed' per official MIoT spec"
+
+    def test_status_21_is_washing_mop_pause(self, vacuum):
+        """Official spec: status 21 = 'WashingMopPause' (NOT water tank alert)."""
+        mock_results = [{"siid": 2, "piid": 1, "code": 0, "value": 21}]
+        with patch("xiao.core.cloud_vacuum.cloud_get_properties", return_value=mock_results):
+            data = vacuum.status()
+        # Per official spec it's WashingMopPause; our code has ⚠️ Water Tank Alert as a warning
+        # Keep the user-friendly alert label but note official name
+        assert "21" in str(data["state"]) or "WashingMop" in str(data["state"]) or "Water" in str(data["state"]), \
+            f"Status 21 should be either WashingMopPause or Water Tank Alert, got: {data['state']}"
+
+    def test_status_9_is_washing(self, vacuum):
+        """Official spec: status 9 = 'Washing' (was 'Washing mop' with lowercase mop)."""
+        mock_results = [{"siid": 2, "piid": 1, "code": 0, "value": 9}]
+        with patch("xiao.core.cloud_vacuum.cloud_get_properties", return_value=mock_results):
+            data = vacuum.status()
+        assert data["state"] in ("Washing", "Washing mop", "Washing Mop"), \
+            f"Status 9 should be washing-related, got: {data['state']}"

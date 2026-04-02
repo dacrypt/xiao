@@ -20,11 +20,13 @@ logger = logging.getLogger(__name__)
 
 
 # MIoT spec for xiaomi.vacuum.c102gl (X20+)
-# Discovered via cloud property scan - actual available properties:
+# Discovered via cloud property scan + official miot-spec.org spec:
 # siid 1: device-information (manufacturer, model, serial, firmware, serial-num)
-# siid 2: sweep (status, fan-level, mode, ?, sweep-type)
+# siid 2: vacuum/sweep service (status, fault, mode/fan-speed, room-ids, dry-left-time)
 # siid 3: battery (battery-level, charging-state)
-# siid 4: clean-log (total-clean-time, total-clean-times, total-clean-area, ?, ?, ?, ?)
+# siid 4: vacuum-extend (Xiaomi-specific: work-mode, cleaning-time, cleaning-area, cleaning-mode,
+#           mop-mode/water-level WRITABLE, waterbox-status, task-status, clean-extend-data write-only,
+#           break-point-restart, carpet-press, child-lock, clean-rags-tip, ...)
 # siid 5: do-not-disturb (enable, start-time, end-time)
 # siid 7: audio (volume, voice-packet, voice-info)
 # siid 8: timezone/schedule (timezone, schedules, ?, ?)
@@ -63,11 +65,18 @@ MIOT_SPEC = {
     # siid 8 = timezone/schedules
     "timezone": {"siid": 8, "piid": 1},
     "schedules": {"siid": 8, "piid": 2},
-    # siid 18 = mop consumable
-    "mop_life_level": {"siid": 18, "piid": 1},  # Mop life remaining (%)
-    "mop_left_time": {"siid": 18, "piid": 2},  # Mop hours remaining
+    # siid 18 = mop consumable (read-only)
+    "mop_life_level": {"siid": 18, "piid": 1},  # Mop life remaining (%) — READ-ONLY, NOT water level
+    "mop_left_time": {"siid": 18, "piid": 2},   # Mop hours remaining
     # siid 2 = fault
     "fault": {"siid": 2, "piid": 2},
+    # siid 4 = vacuum-extend (Xiaomi-specific service, not standard MIoT)
+    "mop_mode": {"siid": 4, "piid": 5},          # mop-mode / water level (1=Low, 2=Medium, 3=High) — WRITABLE
+    "break_point_restart": {"siid": 4, "piid": 11},  # Resume after charge (0=Off, 1=On) — writable
+    "carpet_press": {"siid": 4, "piid": 12},     # Carpet boost (0=Off, 1=On) — writable
+    "child_lock": {"siid": 4, "piid": 27},       # Child lock (0=Off, 1=On) — writable
+    "clean_rags_tip": {"siid": 4, "piid": 16},   # Mop wash reminder interval (minutes, 0-120) — writable
+    "clean_extend_data": {"siid": 4, "piid": 10},  # Room/zone clean params (write-only string JSON)
 }
 
 # Actions — using standard MIoT action IDs
@@ -165,7 +174,7 @@ class CloudVacuumService:
             10: "Go Washing",
             11: "Building map",
             12: "Sweeping And Mopping",
-            13: "In Dock",
+            13: "Charging Completed",
             14: "Upgrading",
             19: "Water Inspecting",
             21: "⚠️ Water Tank Alert",
@@ -572,32 +581,42 @@ class CloudVacuumService:
 
     # ── Water/mop settings ────────────────────────────────────────
 
-    WATER_LEVELS = {"low": 32, "medium": 64, "high": 96}
-    WATER_LEVEL_NAMES = {32: "Low", 64: "Medium", 96: "High"}
+    # Official MIoT spec: siid 4 (vacuum-extend) piid 5 = mop-mode
+    # 1=Low, 2=Medium, 3=High (read+write+notify)
+    # NOTE: siid 18 piid 1 is mop-life-level (read-only %) — NOT water level!
+    WATER_LEVELS = {"low": 1, "medium": 2, "high": 3}
+    WATER_LEVEL_NAMES = {1: "low", 2: "medium", 3: "high"}
 
     def water_level(self) -> dict[str, Any]:
-        """Read water flow setting from schedules/mode config.
+        """Read mop water flow setting from vacuum-extend service.
 
-        Note: siid 18 is mop consumable (life level), NOT water flow.
-        Water flow level is embedded in schedule strings and set via clean params.
+        siid 4, piid 5 = mop-mode (1=Low, 2=Medium, 3=High) — writable.
         """
-        # Return the water level from current mode if available
-        return {"level": "Medium", "note": "Water flow is set per-clean or per-schedule, not a global property"}
+        results = cloud_get_properties(
+            self.cloud,
+            self.did,
+            [{"siid": 4, "piid": 5}],
+            country=self.country,
+        )
+        if results and results[0].get("code", 0) == 0:
+            raw = results[0].get("value")
+            name = self.WATER_LEVEL_NAMES.get(raw, str(raw))
+            return {"water_level": name, "water_level_raw": raw}
+        return {"water_level": "unknown", "water_level_raw": None}
 
     def set_water_level(self, level: str) -> list:
-        """Set water level for next clean: low, medium, high.
+        """Set mop water level: low (1), medium (2), high (3).
 
-        Note: This is stored as part of the clean command params, not a standalone property.
+        Writes to siid=4 piid=5 (mop-mode in vacuum-extend service).
+        Official MIoT spec value-list: 1=Low, 2=Medium, 3=High.
         """
         val = self.WATER_LEVELS.get(level.lower())
         if val is None:
             raise ValueError(f"Unknown water level: {level}. Use: {', '.join(self.WATER_LEVELS)}")
-        # Water level is typically passed with the clean command, not set independently
-        # But some firmware versions accept it as a property
         return cloud_set_properties(
             self.cloud,
             self.did,
-            [{"siid": 18, "piid": 1, "value": val}],
+            [{"siid": 4, "piid": 5, "value": val}],
             country=self.country,
         )
 

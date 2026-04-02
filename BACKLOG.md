@@ -10,6 +10,8 @@
 - 🔴 Room-specific cleaning unreliable — `clean_rooms_miot()` returns code=0 but vacuum doesn't move. Need to investigate alternative params or sequences.
 - 🔴 `last_clean_date` shows 2026-01-12 (stale) — the unix timestamp (1768243787) might be wrong or siid 12 piid 1 is something else on this model.
 - 🔴 FIXED: `set_fan_speed()` was writing to siid 2 piid 2 (device fault, read-only!) instead of piid 3 (mode/fan). This means every `xiao speed set` command was attempting to write a fault code. Also `status()` was mapping piid 2 (fault) → `fan_speed` display, causing garbage values. Fixed 2026-03-31.
+- 🔴 FIXED: `set_water_level()` was writing to siid 18 piid 1 (mop-life-level, READ-ONLY %) instead of siid 4 piid 5 (mop-mode, 1=Low, 2=Medium, 3=High). Every water level command was corrupting mop consumable tracking. Also `water_level()` returned a stub string instead of reading from the device. Fixed 2026-04-02.
+- 🔴 FIXED: `status()` mapped state 13 → "In Dock" but official MIoT spec says 13 = "Charging Completed". Fixed 2026-04-02.
 
 ## Improvements Planned
 - 🟠 Token auto-refresh on 401 — detect expired token, auto-refresh via browser CDP, retry command
@@ -23,6 +25,21 @@
 ## Research / Exploration
 - ⚪ Map extraction — MITM Mi Home app traffic to find decryption key for cloud map data
 - ⚪ Room IDs verification — map room IDs to actual room names from Mi Home app
+- ⚪ **vacuum-extend (siid 4) — fully mapped from official miot-spec.org JSON (2026-04-02):**
+  - piid 4 = cleaning-mode (0=Quiet, 1=Standard, 2=Medium, 3=Strong) — READ-ONLY mirror of fan mode
+  - piid 5 = mop-mode / water level (1=Low, 2=Medium, 3=High) — **WRITABLE** ✅ Now implemented
+  - piid 6 = waterbox-status (0=No, 1=Yes) — reads whether water box is attached
+  - piid 7 = task-status (uint8 0-255) — unknown semantics
+  - piid 10 = clean-extend-data (string, **write-only**) — likely the room cleaning JSON param!
+  - piid 11 = break-point-restart (0=Off, 1=On) — resume after charging — writable
+  - piid 12 = carpet-press (0=Off, 1=On) — carpet boost — writable
+  - piid 16 = clean-rags-tip (0-120 minutes) — mop wash reminder — writable
+  - piid 17 = keep-sweeper-time (int32 minutes) — unknown
+  - piid 18 = faults (string) — extended fault string
+  - piid 27 = child-lock (0=Off, 1=On) — writable
+  - piid 34 = smart-wash-switch (0=Off, 1=On) — smart mop wash
+  - piid 36 = carpet-escape (1=Escape, 2=Auto) — carpet avoidance mode
+- ⚪ **Room cleaning deep dive:** Official spec: `siid 2 aiid 3 = start-room-sweep`, in=[piid 4 (Room IDs string)]. The piid 4 (room-ids) has `access: []` meaning NO standalone read/write — it only works as an action param. Next step: test `clean_rooms_miot()` with piid 4 value as comma-separated string like "3,8,7,6". Also try `clean-extend-data` (siid 4 piid 10) as alternative path — write JSON before calling start-sweep.
 - ⚪ Local UDP fallback — periodically check if vacuum becomes reachable locally
 - ⚪ Valetudo compatibility — monitor if X20+ (c102gl) gets rooting support
 - ⚪ Home Assistant integration — MQTT or REST sensor for HA
@@ -49,6 +66,9 @@ Sources: Valetudo, python-miio, hass-xiaomi-miot, r/Xiaomi, r/homeassistant
 - OTA firmware management
 
 ## Completed
+- ✅ Water level MIoT property bug fix — `set_water_level()` was writing to siid 18 piid 1 (mop-life-level, READ-ONLY %) instead of siid 4 piid 5 (mop-mode, writable). Official MIoT spec confirms: siid 4 piid 5 = `mop-mode` (1=Low, 2=Medium, 3=High). Also fixed `water_level()` to actually read from the device instead of returning stub string. Added 7 new tests. (2026-04-02)
+- ✅ Status 13 corrected — `status()` mapped state 13 → "In Dock" but official MIoT spec says 13 = "Charging Completed". Fixed with test. (2026-04-02)
+- ✅ MIOT_SPEC extended — Added mop-mode, break-point-restart, carpet-press, child-lock, clean-rags-tip, clean-extend-data to MIOT_SPEC dict. Updated module comments to reflect siid 4 = vacuum-extend (not clean-log). (2026-04-02)
 - ✅ Fan speed MIoT property bug fix — `set_fan_speed()` was writing to siid 2 piid 2 (device fault, read-only!). Official MIoT spec confirms: piid 2 = fault, piid 3 = mode/fan speed (0=Silent, 1=Basic, 2=Strong, 3=Full Speed). Fixed read and write paths. Added 5 new tests confirming correct piid usage. (2026-03-31)
 - ✅ Status fan_speed parsing corrected — was mapping piid 2 (fault code) to fan speed display. Now correctly reads piid 3 for fan speed and stores piid 2 as `fault_code`. (2026-03-31)
 - ✅ MIOT_SPEC corrected — `fan_level` now points to piid 3, `fault_code` added for piid 2, `dry_left_time` added for piid 5 (was wrongly called `sweep_type`). (2026-03-31)
