@@ -33,7 +33,7 @@ logger = logging.getLogger(__name__)
 # siid 9: consumable main-brush (work-time, work-life)
 # siid 10: consumable side-brush (work-time, work-life)
 # siid 11: consumable filter (work-time, work-life)
-# siid 12: history (last-clean-time, last-clean-area, last-clean-duration, total-area)
+# siid 12: clean-logs (first-clean-time, total-clean-time, total-clean-times, total-clean-area)
 
 MIOT_SPEC = {
     # siid 2 = sweep
@@ -57,10 +57,10 @@ MIOT_SPEC = {
     "side_brush_life": {"siid": 10, "piid": 2},
     "filter_time": {"siid": 11, "piid": 1},
     "filter_life": {"siid": 11, "piid": 2},
-    # siid 12 = history
-    "last_clean_time": {"siid": 12, "piid": 1},
-    "last_clean_area": {"siid": 12, "piid": 2},
-    "last_clean_duration": {"siid": 12, "piid": 3},
+    # siid 12 = clean-logs
+    "first_clean_time": {"siid": 12, "piid": 1},
+    "history_total_clean_time": {"siid": 12, "piid": 2},
+    "history_total_clean_times": {"siid": 12, "piid": 3},
     "total_area": {"siid": 12, "piid": 4},
     # siid 8 = timezone/schedules
     "timezone": {"siid": 8, "piid": 1},
@@ -404,26 +404,30 @@ class CloudVacuumService:
     # ── Clean history ─────────────────────────────────────────────
 
     def clean_history(self) -> dict[str, Any]:
-        """Read cleaning history totals (siid 4) and last-clean details (siid 12)."""
+        """Read cleaning history totals from siid 12 clean-logs.
+
+        Official MIoT spec for xiaomi.vacuum.c102gl:
+        - siid 12 piid 1 = first-clean-time
+        - siid 12 piid 2 = total-clean-time (minutes)
+        - siid 12 piid 3 = total-clean-times (count)
+        - siid 12 piid 4 = total-clean-area
+
+        Older code incorrectly treated piid 1 as last-clean-time, which produced stale/misleading
+        `last_clean_date` values.
+        """
         from datetime import datetime
 
         props = [
-            {"siid": 4, "piid": 1},  # total-clean-time (minutes)
-            {"siid": 4, "piid": 2},  # total-clean-times (count)
-            {"siid": 4, "piid": 3},  # total-clean-area
-            {"siid": 12, "piid": 1},  # last-clean-time (unix timestamp)
-            {"siid": 12, "piid": 2},  # last-clean-area
-            {"siid": 12, "piid": 3},  # last-clean-duration (minutes)
-            {"siid": 12, "piid": 4},  # total-area (from siid 12)
+            {"siid": 12, "piid": 1},  # first-clean-time (unix timestamp)
+            {"siid": 12, "piid": 2},  # total-clean-time (minutes)
+            {"siid": 12, "piid": 3},  # total-clean-times (count)
+            {"siid": 12, "piid": 4},  # total-clean-area
         ]
         results = cloud_get_properties(self.cloud, self.did, props, country=self.country)
         mapping = {
-            (4, 1): "total_clean_duration",
-            (4, 2): "total_clean_count",
-            (4, 3): "total_clean_area",
-            (12, 1): "last_clean_timestamp",
-            (12, 2): "last_clean_area",
-            (12, 3): "last_clean_duration",
+            (12, 1): "first_clean_timestamp",
+            (12, 2): "total_clean_duration",
+            (12, 3): "total_clean_count",
             (12, 4): "total_area",
         }
         data: dict[str, Any] = {}
@@ -434,10 +438,9 @@ class CloudVacuumService:
             if key:
                 data[key] = r.get("value")
 
-        # Convert timestamp to human-readable
-        ts = data.pop("last_clean_timestamp", None)
+        ts = data.pop("first_clean_timestamp", None)
         if ts and isinstance(ts, int) and ts > 1_000_000_000:
-            data["last_clean_date"] = datetime.fromtimestamp(ts).strftime("%Y-%m-%d %H:%M")
+            data["first_clean_date"] = datetime.fromtimestamp(ts).strftime("%Y-%m-%d %H:%M")
 
         # Add human-readable duration display (raw value is minutes)
         # e.g. 130 → "2h 10min", 45 → "45min", 0 → "0min"
@@ -452,20 +455,25 @@ class CloudVacuumService:
         return data
 
     def last_clean(self) -> dict[str, Any]:
-        """Read last cleaning session details (siid 12)."""
+        """Best-effort history details.
+
+        The official c102gl MIoT spec does not expose a dedicated "last clean" record via siid 12.
+        We return the spec-backed clean-log totals plus the first clean date instead of mislabeling
+        first-clean-time as the last run.
+        """
         from datetime import datetime
 
         props = [
-            MIOT_SPEC["last_clean_time"],
-            MIOT_SPEC["last_clean_area"],
-            MIOT_SPEC["last_clean_duration"],
+            MIOT_SPEC["first_clean_time"],
+            MIOT_SPEC["history_total_clean_time"],
+            MIOT_SPEC["history_total_clean_times"],
         ]
         results = cloud_get_properties(self.cloud, self.did, props, country=self.country)
         data: dict[str, Any] = {}
         mapping = {
-            (12, 1): "last_clean_timestamp",
-            (12, 2): "last_clean_area",
-            (12, 3): "last_clean_duration",
+            (12, 1): "first_clean_timestamp",
+            (12, 2): "total_clean_duration",
+            (12, 3): "total_clean_count",
         }
         for r in results:
             if r.get("code", 0) != 0:
@@ -474,9 +482,9 @@ class CloudVacuumService:
             if key:
                 data[key] = r.get("value")
 
-        ts = data.pop("last_clean_timestamp", None)
+        ts = data.pop("first_clean_timestamp", None)
         if ts and isinstance(ts, int) and ts > 1_000_000_000:
-            data["last_clean_date"] = datetime.fromtimestamp(ts).strftime("%Y-%m-%d %H:%M")
+            data["first_clean_date"] = datetime.fromtimestamp(ts).strftime("%Y-%m-%d %H:%M")
 
         return data
 
@@ -959,16 +967,16 @@ class CloudVacuumService:
                 "mop": {"life_pct": data.get("s18_p1", 0), "left_hours": data.get("s18_p2", 0)},
             },
             "history": {
-                "last_clean_area": data.get("s12_p2", 0),
-                "last_clean_duration": data.get("s12_p3", 0),
+                "total_clean_duration": data.get("s12_p2", 0),
+                "total_clean_count": data.get("s12_p3", 0),
                 "total_area": data.get("s12_p4", 0),
             },
         }
 
-        # Convert last_clean timestamp
+        # Convert first_clean timestamp
         ts = data.get("s12_p1")
         if ts and isinstance(ts, int) and ts > 1_000_000_000:
-            result["history"]["last_clean_timestamp"] = ts
-            result["history"]["last_clean_date"] = datetime.fromtimestamp(ts).strftime("%Y-%m-%d %H:%M")
+            result["history"]["first_clean_timestamp"] = ts
+            result["history"]["first_clean_date"] = datetime.fromtimestamp(ts).strftime("%Y-%m-%d %H:%M")
 
         return result

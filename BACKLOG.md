@@ -8,7 +8,6 @@
 
 ## Active Bugs
 - 🔴 Room-specific cleaning unreliable — `clean_rooms_miot()` returns code=0 but vacuum doesn't move. Need to investigate alternative params or sequences.
-- 🔴 `last_clean_date` shows 2026-01-12 (stale) — the unix timestamp (1768243787) might be wrong or siid 12 piid 1 is something else on this model.
 - 🔴 FIXED: `set_fan_speed()` was writing to siid 2 piid 2 (device fault, read-only!) instead of piid 3 (mode/fan). This means every `xiao speed set` command was attempting to write a fault code. Also `status()` was mapping piid 2 (fault) → `fan_speed` display, causing garbage values. Fixed 2026-03-31.
 - 🔴 FIXED: `set_water_level()` was writing to siid 18 piid 1 (mop-life-level, READ-ONLY %) instead of siid 4 piid 5 (mop-mode, 1=Low, 2=Medium, 3=High). Every water level command was corrupting mop consumable tracking. Also `water_level()` returned a stub string instead of reading from the device. Fixed 2026-04-02.
 - 🔴 FIXED: `status()` mapped state 13 → "In Dock" but official MIoT spec says 13 = "Charging Completed". Fixed 2026-04-02.
@@ -25,6 +24,12 @@
 ## Research / Exploration
 - ⚪ Map extraction — MITM Mi Home app traffic to find decryption key for cloud map data
 - ⚪ Room IDs verification — map room IDs to actual room names from Mi Home app
+- ⚪ **clean-logs (siid 12) corrected from official miot-spec.org JSON (2026-04-07):**
+  - piid 1 = `first-clean-time` (unix timestamp) — **NOT** `last-clean-time`
+  - piid 2 = `total-clean-time` (minutes)
+  - piid 3 = `total-clean-times` (count)
+  - piid 4 = `total-clean-area`
+  - Implication: current cloud API/spec does not expose a dedicated `last-clean-date` field for c102gl via siid 12; any real per-run history likely needs app/cloud log endpoints or map/log filenames from siid 4 piid 9.
 - ⚪ **vacuum-extend (siid 4) — fully mapped from official miot-spec.org JSON (2026-04-02):**
   - piid 4 = cleaning-mode (0=Quiet, 1=Standard, 2=Medium, 3=Strong) — READ-ONLY mirror of fan mode
   - piid 5 = mop-mode / water level (1=Low, 2=Medium, 3=High) — **WRITABLE** ✅ Now implemented
@@ -66,6 +71,7 @@ Sources: Valetudo, python-miio, hass-xiaomi-miot, r/Xiaomi, r/homeassistant
 - OTA firmware management
 
 ## Completed
+- ✅ Clean history / first-clean-time mapping fix — `siid 12 piid 1` was incorrectly treated as `last-clean-time`, which made `last_clean_date` stale/misleading. Official MIoT spec confirms siid 12 is `clean-logs`: piid 1 = `first-clean-time`, piid 2 = `total-clean-time`, piid 3 = `total-clean-times`, piid 4 = `total-clean-area`. Updated `clean_history()`, `last_clean()`, and history scan output to expose `first_clean_date` and correct aggregate totals instead of fake last-run fields. Added regression tests. (2026-04-07)
 - ✅ Water level MIoT property bug fix — `set_water_level()` was writing to siid 18 piid 1 (mop-life-level, READ-ONLY %) instead of siid 4 piid 5 (mop-mode, writable). Official MIoT spec confirms: siid 4 piid 5 = `mop-mode` (1=Low, 2=Medium, 3=High). Also fixed `water_level()` to actually read from the device instead of returning stub string. Added 7 new tests. (2026-04-02)
 - ✅ Status 13 corrected — `status()` mapped state 13 → "In Dock" but official MIoT spec says 13 = "Charging Completed". Fixed with test. (2026-04-02)
 - ✅ MIOT_SPEC extended — Added mop-mode, break-point-restart, carpet-press, child-lock, clean-rags-tip, clean-extend-data to MIOT_SPEC dict. Updated module comments to reflect siid 4 = vacuum-extend (not clean-log). (2026-04-02)
