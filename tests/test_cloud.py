@@ -6,6 +6,7 @@ import pytest
 
 from xiao.core.cloud import (
     TokenExpiredError,
+    XiaomiCloud,
     cloud_get_properties,
 )
 
@@ -50,6 +51,37 @@ class TestTokenExpiredRetry:
             pytest.raises(TokenExpiredError),
         ):
             cloud_get_properties(mock_cloud, "did123", [{"siid": 2, "piid": 1}], country="us")
+
+
+class TestGetDevicesTokenRetry:
+    def test_get_devices_retries_on_token_expired(self, mock_cloud):
+        """XiaomiCloud.get_devices() retries once after refreshing an expired token."""
+        call_count = 0
+
+        def mock_signed_request(url, params):
+            nonlocal call_count
+            call_count += 1
+            if call_count == 1:
+                raise TokenExpiredError("expired")
+            return '{"result": {"list": [{"did": "123", "name": "Vacuum"}]}}'
+
+        mock_cloud._signed_request = mock_signed_request
+
+        with patch("xiao.core.cloud._refresh_cloud_session", return_value=True):
+            result = XiaomiCloud.get_devices(mock_cloud, country="us")
+
+        assert call_count == 2
+        assert result == [{"did": "123", "name": "Vacuum"}]
+
+    def test_get_devices_raises_when_refresh_fails(self, mock_cloud):
+        """XiaomiCloud.get_devices() surfaces TokenExpiredError if refresh fails."""
+        mock_cloud._signed_request = MagicMock(side_effect=TokenExpiredError("expired"))
+
+        with (
+            patch("xiao.core.cloud._refresh_cloud_session", return_value=False),
+            pytest.raises(TokenExpiredError),
+        ):
+            XiaomiCloud.get_devices(mock_cloud, country="us")
 
 
 class TestSimpleRequest:

@@ -672,10 +672,21 @@ class XiaomiCloud:
             "data": '{"getVirtualModel":true,"getHuamiDevices":1,"get_split_device":false,"support_smart_home":true}'
         }
 
-        if self.ssecurity:
-            resp_text = self._signed_request(url, params)
-        else:
-            resp_text = self._simple_request(url, params)
+        try:
+            if self.ssecurity:
+                resp_text = self._signed_request(url, params)
+            else:
+                resp_text = self._simple_request(url, params)
+        except TokenExpiredError:
+            logger.info("Token expired while fetching device list, attempting refresh...")
+            if _refresh_cloud_session(self):
+                logger.info("Token refreshed, retrying device list request...")
+                if self.ssecurity:
+                    resp_text = self._signed_request(url, params)
+                else:
+                    resp_text = self._simple_request(url, params)
+            else:
+                raise
 
         data = json.loads(resp_text)
         return data.get("result", {}).get("list", [])

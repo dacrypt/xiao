@@ -7,14 +7,12 @@
 - ⚪ P4 — Research / exploration
 
 ## Active Bugs
-- 🔴 Room-specific cleaning unreliable — `clean_rooms_miot()` returns code=0 but vacuum doesn't move. Need to investigate alternative params or sequences.
+- 🔴 Room-specific cleaning still needs on-device verification — `clean_rooms_miot()` now preloads `siid 4 piid 10` `clean-extend-data` and then calls official `siid 2 aiid 3`, but actual X20+ hardware behavior still needs confirmation after this sequence change. (Updated 2026-04-08)
 - 🔴 FIXED: `set_fan_speed()` was writing to siid 2 piid 2 (device fault, read-only!) instead of piid 3 (mode/fan). This means every `xiao speed set` command was attempting to write a fault code. Also `status()` was mapping piid 2 (fault) → `fan_speed` display, causing garbage values. Fixed 2026-03-31.
 - 🔴 FIXED: `set_water_level()` was writing to siid 18 piid 1 (mop-life-level, READ-ONLY %) instead of siid 4 piid 5 (mop-mode, 1=Low, 2=Medium, 3=High). Every water level command was corrupting mop consumable tracking. Also `water_level()` returned a stub string instead of reading from the device. Fixed 2026-04-02.
 - 🔴 FIXED: `status()` mapped state 13 → "In Dock" but official MIoT spec says 13 = "Charging Completed". Fixed 2026-04-02.
 
 ## Improvements Planned
-- 🟠 Token auto-refresh on 401 — detect expired token, auto-refresh via browser CDP, retry command
-- 🟠 Better room cleaning — research if X20+ needs specific clean_param JSON format or a different action sequence
 - 🟠 Dashboard: clean up lower sections (Audio, Clean Log Raw, All Properties) — too verbose, collapse by default
 - 🔵 Dashboard: add dark/light theme toggle
 - 🔵 CLI: `xiao rooms rename <id> <name>` — interactive room renaming
@@ -45,6 +43,21 @@
   - piid 34 = smart-wash-switch (0=Off, 1=On) — smart mop wash
   - piid 36 = carpet-escape (1=Escape, 2=Auto) — carpet avoidance mode
 - ⚪ **Room cleaning deep dive:** Official spec: `siid 2 aiid 3 = start-room-sweep`, in=[piid 4 (Room IDs string)]. The piid 4 (room-ids) has `access: []` meaning NO standalone read/write — it only works as an action param. Next step: test `clean_rooms_miot()` with piid 4 value as comma-separated string like "3,8,7,6". Also try `clean-extend-data` (siid 4 piid 10) as alternative path — write JSON before calling start-sweep.
+- ⚪ **Room cleaning research update (2026-04-08):**
+  - Official spec page for `xiaomi.vacuum.c102gl` still points to `siid 2 aiid 3` (`start-room-sweep`) with room IDs passed as `piid 4` string.
+  - `hass-xiaomi-miot` README example shows Dreame/Xiaomi custom room cleaning via `siid 4 aiid 1` with params `piid 1 = 18` and `piid 10 = clean-extend-data`, where `clean-extend-data` is JSON under `selects`.
+  - `dreame-vacuum` issue #910 logs show the `selects` rows encode at least room id, repeat count, fan mode, water mode, and explicit order: e.g. `[[1,1,3,1,1],[3,1,3,1,2], ...]`.
+  - `openHAB` miio binding docs list both `vacuum-start-room-sweep` and `vacuum-extend-start-clean` actions for `xiaomi.vacuum.c102gl`, which supports the idea that both paths exist on X20+.
+  - Community reports still describe `code=0` / accepted actions that do nothing, so success responses alone are not proof of movement.
+- ⚪ **X20+ / c102gl community notes (2026-04-08):**
+  - An ioBroker forum thread reports X20+ exposes `map-req` / `update-map`, but room-id extraction remains unclear for some users even with the official spec.
+  - No clear Valetudo support signal for `xiaomi.vacuum.c102gl` turned up in this pass; keep this as watch-only research, not an actionable integration path yet.
+- ⚪ **Session blocker (2026-04-08):**
+  - This sandbox allows editing tracked files but denies writes inside `.git/`. `git add` / `git commit` failed with `fatal: Unable to create '.git/index.lock': Operation not permitted`, so this session could not create the requested local commit.
+- ⚪ **Test-suite findings (2026-04-09):**
+  - Full `pytest tests/ -v` currently still has 8 unrelated failures in `tests/test_cloud_vacuum.py`.
+  - Failing areas: status parsing / fan-speed decoding regressions, plus missing `total_clean_duration_display` in `clean_history()`.
+  - These pre-existing failures are outside the token-refresh scope and should be handled as a separate bugfix pass.
 - ⚪ Local UDP fallback — periodically check if vacuum becomes reachable locally
 - ⚪ Valetudo compatibility — monitor if X20+ (c102gl) gets rooting support
 - ⚪ Home Assistant integration — MQTT or REST sensor for HA
@@ -71,6 +84,8 @@ Sources: Valetudo, python-miio, hass-xiaomi-miot, r/Xiaomi, r/homeassistant
 - OTA firmware management
 
 ## Completed
+- ✅ Device list token auto-refresh — `XiaomiCloud.get_devices()` now catches `TokenExpiredError`, refreshes cloud tokens via browser CDP helper, and retries once before surfacing the error. This closes the remaining gap where setup/device listing could still fail on expired Xiaomi cloud sessions even though RPC/property helpers already retried. Added regression tests for both refresh-success and refresh-failure paths. (2026-04-09)
+- ✅ Room cleaning reliability improvement — `clean_rooms_miot()` now preloads `vacuum-extend` `clean-extend-data` (`siid 4 piid 10`) using a `selects` payload derived from room order, repeat count, current fan mode, and current water mode, then calls the official `siid 2 aiid 3` room-sweep action. CLI `xiao clean --room ... --repeat N` now forwards `repeat` into that MIoT path instead of silently dropping it. Added regression tests. Hardware verification still pending. (2026-04-08)
 - ✅ Clean history / first-clean-time mapping fix — `siid 12 piid 1` was incorrectly treated as `last-clean-time`, which made `last_clean_date` stale/misleading. Official MIoT spec confirms siid 12 is `clean-logs`: piid 1 = `first-clean-time`, piid 2 = `total-clean-time`, piid 3 = `total-clean-times`, piid 4 = `total-clean-area`. Updated `clean_history()`, `last_clean()`, and history scan output to expose `first_clean_date` and correct aggregate totals instead of fake last-run fields. Added regression tests. (2026-04-07)
 - ✅ Water level MIoT property bug fix — `set_water_level()` was writing to siid 18 piid 1 (mop-life-level, READ-ONLY %) instead of siid 4 piid 5 (mop-mode, writable). Official MIoT spec confirms: siid 4 piid 5 = `mop-mode` (1=Low, 2=Medium, 3=High). Also fixed `water_level()` to actually read from the device instead of returning stub string. Added 7 new tests. (2026-04-02)
 - ✅ Status 13 corrected — `status()` mapped state 13 → "In Dock" but official MIoT spec says 13 = "Charging Completed". Fixed with test. (2026-04-02)
