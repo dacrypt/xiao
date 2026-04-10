@@ -20,25 +20,27 @@ logger = logging.getLogger(__name__)
 
 
 # MIoT spec for xiaomi.vacuum.c102gl (X20+)
-# Discovered via cloud property scan - actual available properties:
+# Discovered via cloud property scan + official miot-spec.org spec:
 # siid 1: device-information (manufacturer, model, serial, firmware, serial-num)
-# siid 2: sweep (status, fan-level, mode, ?, sweep-type)
+# siid 2: vacuum/sweep service (status, fault, mode/fan-speed, room-ids, dry-left-time)
 # siid 3: battery (battery-level, charging-state)
-# siid 4: clean-log (total-clean-time, total-clean-times, total-clean-area, ?, ?, ?, ?)
+# siid 4: vacuum-extend (Xiaomi-specific: work-mode, cleaning-time, cleaning-area, cleaning-mode,
+#           mop-mode/water-level WRITABLE, waterbox-status, task-status, clean-extend-data write-only,
+#           break-point-restart, carpet-press, child-lock, clean-rags-tip, ...)
 # siid 5: do-not-disturb (enable, start-time, end-time)
 # siid 7: audio (volume, voice-packet, voice-info)
 # siid 8: timezone/schedule (timezone, schedules, ?, ?)
 # siid 9: consumable main-brush (work-time, work-life)
 # siid 10: consumable side-brush (work-time, work-life)
 # siid 11: consumable filter (work-time, work-life)
-# siid 12: history (last-clean-time, last-clean-area, last-clean-duration, total-area)
+# siid 12: clean-logs (first-clean-time, total-clean-time, total-clean-times, total-clean-area)
 
 MIOT_SPEC = {
     # siid 2 = sweep
     "sweep_status": {"siid": 2, "piid": 1},  # Status enum
-    "fan_level": {"siid": 2, "piid": 2},  # Fan speed level
-    "sweep_mode": {"siid": 2, "piid": 3},  # Mode
-    "sweep_type": {"siid": 2, "piid": 5},  # Sweep type
+    "fault_code": {"siid": 2, "piid": 2},   # Device Fault (read-only, uint8 0-255) — NOT fan speed
+    "fan_level": {"siid": 2, "piid": 3},    # Mode / fan speed (0=Silent, 1=Basic, 2=Strong, 3=Full Speed)
+    "dry_left_time": {"siid": 2, "piid": 5},  # Dry Left Time (minutes, read-only)
     # siid 3 = battery
     "battery_level": {"siid": 3, "piid": 1},  # Battery percentage
     "charging_state": {"siid": 3, "piid": 2},  # Charging state
@@ -55,19 +57,26 @@ MIOT_SPEC = {
     "side_brush_life": {"siid": 10, "piid": 2},
     "filter_time": {"siid": 11, "piid": 1},
     "filter_life": {"siid": 11, "piid": 2},
-    # siid 12 = history
-    "last_clean_time": {"siid": 12, "piid": 1},
-    "last_clean_area": {"siid": 12, "piid": 2},
-    "last_clean_duration": {"siid": 12, "piid": 3},
+    # siid 12 = clean-logs
+    "first_clean_time": {"siid": 12, "piid": 1},
+    "history_total_clean_time": {"siid": 12, "piid": 2},
+    "history_total_clean_times": {"siid": 12, "piid": 3},
     "total_area": {"siid": 12, "piid": 4},
     # siid 8 = timezone/schedules
     "timezone": {"siid": 8, "piid": 1},
     "schedules": {"siid": 8, "piid": 2},
-    # siid 18 = mop consumable
-    "mop_life_level": {"siid": 18, "piid": 1},  # Mop life remaining (%)
-    "mop_left_time": {"siid": 18, "piid": 2},  # Mop hours remaining
+    # siid 18 = mop consumable (read-only)
+    "mop_life_level": {"siid": 18, "piid": 1},  # Mop life remaining (%) — READ-ONLY, NOT water level
+    "mop_left_time": {"siid": 18, "piid": 2},   # Mop hours remaining
     # siid 2 = fault
     "fault": {"siid": 2, "piid": 2},
+    # siid 4 = vacuum-extend (Xiaomi-specific service, not standard MIoT)
+    "mop_mode": {"siid": 4, "piid": 5},          # mop-mode / water level (1=Low, 2=Medium, 3=High) — WRITABLE
+    "break_point_restart": {"siid": 4, "piid": 11},  # Resume after charge (0=Off, 1=On) — writable
+    "carpet_press": {"siid": 4, "piid": 12},     # Carpet boost (0=Off, 1=On) — writable
+    "child_lock": {"siid": 4, "piid": 27},       # Child lock (0=Off, 1=On) — writable
+    "clean_rags_tip": {"siid": 4, "piid": 16},   # Mop wash reminder interval (minutes, 0-120) — writable
+    "clean_extend_data": {"siid": 4, "piid": 10},  # Room/zone clean params (write-only string JSON)
 }
 
 # Actions — using standard MIoT action IDs
@@ -82,6 +91,11 @@ MIOT_ACTIONS = {
     "start_eject": {"siid": 2, "aiid": 10},  # Eject base station tray
     "start_charge": {"siid": 3, "aiid": 1},  # Return to dock
     "identify": {"siid": 6, "aiid": 1},  # Find/beep (identify service)
+    # Consumable resets
+    "reset_main_brush": {"siid": 9, "aiid": 1},
+    "reset_side_brush": {"siid": 10, "aiid": 1},
+    "reset_filter": {"siid": 11, "aiid": 1},
+    "reset_mop": {"siid": 18, "aiid": 1},
 }
 
 
@@ -124,20 +138,29 @@ class CloudVacuumService:
     # ── Status ────────────────────────────────────────────────────
 
     def status(self) -> dict[str, Any]:
-        """Get vacuum status via cloud properties."""
+        """Get vacuum status via cloud properties.
+
+        MIoT spec for xiaomi.vacuum.c102gl:
+          siid 2 piid 1 = status enum (1=Sweeping...23=RemoteClean)
+          siid 2 piid 2 = fault (read-only, uint8 0-255) — stored as fault_code
+          siid 2 piid 3 = mode / fan speed (0=Silent, 1=Basic, 2=Strong, 3=Full Speed)
+          siid 2 piid 5 = dry-left-time (minutes, read-only)
+          siid 3 piid 1 = battery level (%)
+          siid 3 piid 2 = charging state (1=Charging, 2=Not Charging, 5=Go Charging)
+        """
         props_to_get = [
             MIOT_SPEC["sweep_status"],
+            MIOT_SPEC["fault_code"],
+            MIOT_SPEC["fan_level"],
+            MIOT_SPEC["dry_left_time"],
             MIOT_SPEC["battery_level"],
             MIOT_SPEC["charging_state"],
-            MIOT_SPEC["fan_level"],
-            MIOT_SPEC["sweep_mode"],
-            MIOT_SPEC["sweep_type"],
         ]
 
         results = cloud_get_properties(self.cloud, self.did, props_to_get, country=self.country)
 
         data: dict[str, Any] = {}
-        # Status values discovered from device (value=13 when in dock after cleaning)
+        # Status values from official MIoT spec + observed device values
         status_map = {
             1: "Sweeping",
             2: "Idle",
@@ -151,30 +174,20 @@ class CloudVacuumService:
             10: "Go Washing",
             11: "Building map",
             12: "Sweeping And Mopping",
-            13: "In Dock",
+            13: "Charging Completed",
             14: "Upgrading",
             19: "Water Inspecting",
             21: "⚠️ Water Tank Alert",
             22: "Dust Collecting",
             23: "Remote Clean",
         }
-        # Fan speed values from c102gl (X20+)
-        # Device returns raw percentage values for fan_level (siid 2, piid 2)
+        # Fan speed / mode values (siid 2, piid 3) — official MIoT spec
+        # 0=Silent, 1=Basic(Standard), 2=Strong(Medium), 3=Full Speed(Turbo)
         fan_map = {
-            0: "Silent",
-            1: "Standard",
-            2: "Medium",
-            3: "Turbo",
-            101: "Silent",
-            102: "Standard",
-            103: "Medium",
-            104: "Turbo",
-        }
-        mode_map = {
-            0: "Sweep only",
-            1: "Mop only",
-            2: "Sweep & Mop",
-            3: "Custom",
+            0: "silent",
+            1: "standard",
+            2: "medium",
+            3: "turbo",
         }
 
         for r in results:
@@ -189,34 +202,25 @@ class CloudVacuumService:
             if siid == 2 and piid == 1:
                 data["state"] = status_map.get(value, f"Unknown({value})")
             elif siid == 2 and piid == 2:
-                data["fan_level_raw"] = value
-                if value in fan_map:
-                    data["fan_speed"] = fan_map[value]
-                elif isinstance(value, int) and value > 3:
-                    # Raw percentage — map to friendly name
-                    if value <= 30:
-                        data["fan_speed"] = f"Silent ({value}%)"
-                    elif value <= 55:
-                        data["fan_speed"] = f"Standard ({value}%)"
-                    elif value <= 75:
-                        data["fan_speed"] = f"Medium ({value}%)"
-                    else:
-                        data["fan_speed"] = f"Turbo ({value}%)"
-                else:
-                    data["fan_speed"] = str(value)
+                # fault code — store for diagnostics, do NOT map to fan_speed
+                data["fault_code"] = value
             elif siid == 2 and piid == 3:
-                data["mode"] = mode_map.get(value, str(value))
+                # mode = fan speed level
+                data["fan_speed"] = fan_map.get(value, str(value))
             elif siid == 2 and piid == 5:
-                data["sweep_type"] = value
+                data["dry_left_time_min"] = value
             elif siid == 3 and piid == 1:
                 data["battery"] = value
             elif siid == 3 and piid == 2:
-                charging = {1: "Charging", 2: "Not charging", 3: "Charged"}
+                charging = {1: "Charging", 2: "Not charging", 3: "Charged", 5: "Go Charging"}
                 data["charging"] = charging.get(value, str(value))
 
         return data
 
     # ── Fan speed ─────────────────────────────────────────────────
+    # According to official MIoT spec for xiaomi.vacuum.c102gl:
+    #   siid 2, piid 2 = 'fault' (read-only, uint8 0-255) — NOT fan speed
+    #   siid 2, piid 3 = 'mode' (0=Silent, 1=Basic, 2=Strong, 3=Full Speed) = fan speed
 
     FAN_SPEEDS = {"silent": 0, "standard": 1, "medium": 2, "turbo": 3}
     FAN_SPEED_NAMES = {v: k for k, v in FAN_SPEEDS.items()}
@@ -225,10 +229,11 @@ class CloudVacuumService:
         level = self.FAN_SPEEDS.get(preset.lower())
         if level is None:
             raise ValueError(f"Unknown speed: {preset}. Use: {', '.join(self.FAN_SPEEDS)}")
+        # Write to siid=2, piid=3 (mode) — NOT piid=2 (fault, read-only)
         return cloud_set_properties(
             self.cloud,
             self.did,
-            [{"siid": 2, "piid": 2, "value": level}],
+            [{"siid": 2, "piid": 3, "value": level}],
             country=self.country,
         )
 
@@ -236,23 +241,13 @@ class CloudVacuumService:
         results = cloud_get_properties(
             self.cloud,
             self.did,
-            [{"siid": 2, "piid": 2}],
+            [{"siid": 2, "piid": 3}],  # mode property (0=Silent..3=Full Speed)
             country=self.country,
         )
         if results and results[0].get("code", 0) == 0:
             value = results[0].get("value")
             if value in self.FAN_SPEED_NAMES:
                 return self.FAN_SPEED_NAMES[value]
-            # Raw percentage — map to friendly name
-            if isinstance(value, int) and value > 3:
-                if value <= 30:
-                    return f"Silent ({value}%)"
-                elif value <= 55:
-                    return f"Standard ({value}%)"
-                elif value <= 75:
-                    return f"Medium ({value}%)"
-                else:
-                    return f"Turbo ({value}%)"
             return str(value)
         return "unknown"
 
@@ -409,26 +404,30 @@ class CloudVacuumService:
     # ── Clean history ─────────────────────────────────────────────
 
     def clean_history(self) -> dict[str, Any]:
-        """Read cleaning history totals (siid 4) and last-clean details (siid 12)."""
+        """Read cleaning history totals from siid 12 clean-logs.
+
+        Official MIoT spec for xiaomi.vacuum.c102gl:
+        - siid 12 piid 1 = first-clean-time
+        - siid 12 piid 2 = total-clean-time (minutes)
+        - siid 12 piid 3 = total-clean-times (count)
+        - siid 12 piid 4 = total-clean-area
+
+        Older code incorrectly treated piid 1 as last-clean-time, which produced stale/misleading
+        `last_clean_date` values.
+        """
         from datetime import datetime
 
         props = [
-            {"siid": 4, "piid": 1},  # total-clean-time (minutes)
-            {"siid": 4, "piid": 2},  # total-clean-times (count)
-            {"siid": 4, "piid": 3},  # total-clean-area
-            {"siid": 12, "piid": 1},  # last-clean-time (unix timestamp)
-            {"siid": 12, "piid": 2},  # last-clean-area
-            {"siid": 12, "piid": 3},  # last-clean-duration (minutes)
-            {"siid": 12, "piid": 4},  # total-area (from siid 12)
+            {"siid": 12, "piid": 1},  # first-clean-time (unix timestamp)
+            {"siid": 12, "piid": 2},  # total-clean-time (minutes)
+            {"siid": 12, "piid": 3},  # total-clean-times (count)
+            {"siid": 12, "piid": 4},  # total-clean-area
         ]
         results = cloud_get_properties(self.cloud, self.did, props, country=self.country)
         mapping = {
-            (4, 1): "total_clean_duration",
-            (4, 2): "total_clean_count",
-            (4, 3): "total_clean_area",
-            (12, 1): "last_clean_timestamp",
-            (12, 2): "last_clean_area",
-            (12, 3): "last_clean_duration",
+            (12, 1): "first_clean_timestamp",
+            (12, 2): "total_clean_duration",
+            (12, 3): "total_clean_count",
             (12, 4): "total_area",
         }
         data: dict[str, Any] = {}
@@ -439,28 +438,42 @@ class CloudVacuumService:
             if key:
                 data[key] = r.get("value")
 
-        # Convert timestamp to human-readable
-        ts = data.pop("last_clean_timestamp", None)
+        ts = data.pop("first_clean_timestamp", None)
         if ts and isinstance(ts, int) and ts > 1_000_000_000:
-            data["last_clean_date"] = datetime.fromtimestamp(ts).strftime("%Y-%m-%d %H:%M")
+            data["first_clean_date"] = datetime.fromtimestamp(ts).strftime("%Y-%m-%d %H:%M")
+
+        # Add human-readable duration display (raw value is minutes)
+        # e.g. 130 → "2h 10min", 45 → "45min", 0 → "0min"
+        duration_min = data.get("total_clean_duration")
+        if duration_min is not None:
+            mins = int(duration_min)
+            if mins >= 60:
+                data["total_clean_duration_display"] = f"{mins // 60}h {mins % 60}min"
+            else:
+                data["total_clean_duration_display"] = f"{mins}min"
 
         return data
 
     def last_clean(self) -> dict[str, Any]:
-        """Read last cleaning session details (siid 12)."""
+        """Best-effort history details.
+
+        The official c102gl MIoT spec does not expose a dedicated "last clean" record via siid 12.
+        We return the spec-backed clean-log totals plus the first clean date instead of mislabeling
+        first-clean-time as the last run.
+        """
         from datetime import datetime
 
         props = [
-            MIOT_SPEC["last_clean_time"],
-            MIOT_SPEC["last_clean_area"],
-            MIOT_SPEC["last_clean_duration"],
+            MIOT_SPEC["first_clean_time"],
+            MIOT_SPEC["history_total_clean_time"],
+            MIOT_SPEC["history_total_clean_times"],
         ]
         results = cloud_get_properties(self.cloud, self.did, props, country=self.country)
         data: dict[str, Any] = {}
         mapping = {
-            (12, 1): "last_clean_timestamp",
-            (12, 2): "last_clean_area",
-            (12, 3): "last_clean_duration",
+            (12, 1): "first_clean_timestamp",
+            (12, 2): "total_clean_duration",
+            (12, 3): "total_clean_count",
         }
         for r in results:
             if r.get("code", 0) != 0:
@@ -469,20 +482,33 @@ class CloudVacuumService:
             if key:
                 data[key] = r.get("value")
 
-        ts = data.pop("last_clean_timestamp", None)
+        ts = data.pop("first_clean_timestamp", None)
         if ts and isinstance(ts, int) and ts > 1_000_000_000:
-            data["last_clean_date"] = datetime.fromtimestamp(ts).strftime("%Y-%m-%d %H:%M")
+            data["first_clean_date"] = datetime.fromtimestamp(ts).strftime("%Y-%m-%d %H:%M")
 
         return data
 
     # ── Consumable reset ──────────────────────────────────────────
 
     def consumable_reset(self, name: str) -> dict:
+        """Reset a consumable counter. Use after replacing the physical part."""
         action_key = f"reset_{name}"
         if action_key not in MIOT_ACTIONS:
-            raise ValueError(f"Unknown consumable: {name}. Use: main_brush, side_brush, filter")
+            raise ValueError(f"Unknown consumable: {name}. Use: main_brush, side_brush, filter, mop")
         a = MIOT_ACTIONS[action_key]
         return cloud_call_action(self.cloud, self.did, a["siid"], a["aiid"], country=self.country)
+
+    def consumable_reset_all(self) -> dict[str, Any]:
+        """Reset ALL consumable counters."""
+        results = {}
+        for name in ("main_brush", "side_brush", "filter", "mop"):
+            try:
+                r = self.consumable_reset(name)
+                code = r.get("result", {}).get("code", r.get("code", -1))
+                results[name] = {"ok": code == 0, "code": code}
+            except Exception as e:
+                results[name] = {"ok": False, "error": str(e)}
+        return results
 
     # ── Rooms / Map ───────────────────────────────────────────────
 
@@ -563,32 +589,42 @@ class CloudVacuumService:
 
     # ── Water/mop settings ────────────────────────────────────────
 
-    WATER_LEVELS = {"low": 32, "medium": 64, "high": 96}
-    WATER_LEVEL_NAMES = {32: "Low", 64: "Medium", 96: "High"}
+    # Official MIoT spec: siid 4 (vacuum-extend) piid 5 = mop-mode
+    # 1=Low, 2=Medium, 3=High (read+write+notify)
+    # NOTE: siid 18 piid 1 is mop-life-level (read-only %) — NOT water level!
+    WATER_LEVELS = {"low": 1, "medium": 2, "high": 3}
+    WATER_LEVEL_NAMES = {1: "low", 2: "medium", 3: "high"}
 
     def water_level(self) -> dict[str, Any]:
-        """Read water flow setting from schedules/mode config.
+        """Read mop water flow setting from vacuum-extend service.
 
-        Note: siid 18 is mop consumable (life level), NOT water flow.
-        Water flow level is embedded in schedule strings and set via clean params.
+        siid 4, piid 5 = mop-mode (1=Low, 2=Medium, 3=High) — writable.
         """
-        # Return the water level from current mode if available
-        return {"level": "Medium", "note": "Water flow is set per-clean or per-schedule, not a global property"}
+        results = cloud_get_properties(
+            self.cloud,
+            self.did,
+            [{"siid": 4, "piid": 5}],
+            country=self.country,
+        )
+        if results and results[0].get("code", 0) == 0:
+            raw = results[0].get("value")
+            name = self.WATER_LEVEL_NAMES.get(raw, str(raw))
+            return {"water_level": name, "water_level_raw": raw}
+        return {"water_level": "unknown", "water_level_raw": None}
 
     def set_water_level(self, level: str) -> list:
-        """Set water level for next clean: low, medium, high.
+        """Set mop water level: low (1), medium (2), high (3).
 
-        Note: This is stored as part of the clean command params, not a standalone property.
+        Writes to siid=4 piid=5 (mop-mode in vacuum-extend service).
+        Official MIoT spec value-list: 1=Low, 2=Medium, 3=High.
         """
         val = self.WATER_LEVELS.get(level.lower())
         if val is None:
             raise ValueError(f"Unknown water level: {level}. Use: {', '.join(self.WATER_LEVELS)}")
-        # Water level is typically passed with the clean command, not set independently
-        # But some firmware versions accept it as a property
         return cloud_set_properties(
             self.cloud,
             self.did,
-            [{"siid": 18, "piid": 1, "value": val}],
+            [{"siid": 4, "piid": 5, "value": val}],
             country=self.country,
         )
 
@@ -893,9 +929,9 @@ class CloudVacuumService:
             },
             "status": {
                 "state": data.get("s2_p1", 0),
-                "fault_code": data.get("s2_p2", 0),
-                "sweep_mode": data.get("s2_p3", 0),
-                "sweep_type_or_dry_time": data.get("s2_p5", 0),
+                "fault_code": data.get("s2_p2", 0),          # siid 2 piid 2 = device fault (0-255)
+                "fan_speed_mode": data.get("s2_p3", 0),       # siid 2 piid 3 = mode/fan (0=Silent..3=Full)
+                "dry_left_time_min": data.get("s2_p5", 0),    # siid 2 piid 5 = dry left time (minutes)
             },
             "battery": {
                 "level": data.get("s3_p1", 0),
@@ -931,16 +967,16 @@ class CloudVacuumService:
                 "mop": {"life_pct": data.get("s18_p1", 0), "left_hours": data.get("s18_p2", 0)},
             },
             "history": {
-                "last_clean_area": data.get("s12_p2", 0),
-                "last_clean_duration": data.get("s12_p3", 0),
+                "total_clean_duration": data.get("s12_p2", 0),
+                "total_clean_count": data.get("s12_p3", 0),
                 "total_area": data.get("s12_p4", 0),
             },
         }
 
-        # Convert last_clean timestamp
+        # Convert first_clean timestamp
         ts = data.get("s12_p1")
         if ts and isinstance(ts, int) and ts > 1_000_000_000:
-            result["history"]["last_clean_timestamp"] = ts
-            result["history"]["last_clean_date"] = datetime.fromtimestamp(ts).strftime("%Y-%m-%d %H:%M")
+            result["history"]["first_clean_timestamp"] = ts
+            result["history"]["first_clean_date"] = datetime.fromtimestamp(ts).strftime("%Y-%m-%d %H:%M")
 
         return result

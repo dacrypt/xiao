@@ -50,3 +50,13 @@ def alias(
     """Set an alias for a room ID."""
     set_room_alias(room_id, name)
     rprint(f'[green]✓ Room {room_id} → "{name}"[/green]')
+
+
+@app.command("rename")
+def rename_room(
+    room_id: int = typer.Argument(help="Room ID"),
+    name: str = typer.Argument(help="New room name"),
+):
+    """Rename a room alias (same as `rooms alias`)."""
+    set_room_alias(room_id, name)
+    rprint(f'[green]✓ Room {room_id} renamed to "{name}"[/green]')

@@ -317,33 +317,27 @@ def render_report(sections: dict[str, Any]) -> None:
 def render_consumables(data: dict[str, Any]) -> None:
     table = Table(title="Consumables", border_style="cyan")
     table.add_column("Component", style="bold")
-    table.add_column("Used", justify="right")
-    table.add_column("Lifetime", justify="right")
-    table.add_column("Remaining", justify="right")
+    table.add_column("Life", justify="right")
+    table.add_column("Hours Left", justify="right")
+    table.add_column("Status", justify="right")
 
+    # MIoT mapping:
+    # siid 9,10 (brushes): piid1=left_time(h), piid2=life_level(%)
+    # siid 11 (filter): piid1=life_level(%), piid2=left_time(h)
+    # siid 18 (mop): piid1=life_level(%), piid2=left_time(h)
     components = [
-        ("Main Brush", "main_brush"),
-        ("Side Brush", "side_brush"),
-        ("Filter", "filter"),
+        ("Main Brush", "main_brush_life", "main_brush_used"),     # life=%, used=hours_left
+        ("Side Brush", "side_brush_life", "side_brush_used"),     # life=%, used=hours_left
+        ("Filter", "filter_used", "filter_life"),                  # used=life_level%, life=hours_left
+        ("Mop Pad", "mop_life_level", "mop_left_time"),           # life_level=%, left_time=hours
     ]
 
-    for label, key in components:
-        used = data.get(f"{key}_used")
-        life = data.get(f"{key}_life")
-        remaining = data.get(f"{key}_remaining", "—")
-        # Values from MIoT are in hours
-        used_str = f"{used}h" if isinstance(used, (int, float)) else "—"
-        life_str = f"{life}h" if isinstance(life, (int, float)) else "—"
-        table.add_row(label, used_str, life_str, _consumable_bar(remaining))
-
-    # Show any extra keys not covered above
-    shown_keys = set()
-    for _, key in components:
-        shown_keys.update([f"{key}_used", f"{key}_life", f"{key}_remaining"])
-    for name, value in data.items():
-        if name not in shown_keys:
-            display_name = name.replace("_", " ").title()
-            table.add_row(display_name, str(value), "", "")
+    for label, pct_key, hours_key in components:
+        pct = data.get(pct_key)
+        hours = data.get(hours_key)
+        pct_str = f"{pct}%" if pct is not None else "—"
+        hours_str = f"{hours}h" if hours is not None else "—"
+        table.add_row(label, _consumable_bar(pct_str), hours_str, "")
 
     console.print(table)
 

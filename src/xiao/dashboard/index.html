@@ -2116,13 +2116,15 @@ async function refreshHistory() {
     const d = await api('/api/history');
     const area = document.getElementById('historyArea');
 
+    // Helper: treat null/undefined as '--' but keep 0 as '0'
+    const fmt = (v, fallback = '--') => (v !== null && v !== undefined) ? v : fallback;
     const stats = [
-      { val: d.total_area || d.total_area_all || '--', unit: 'm²', label: 'Total Area' },
-      { val: d.total_clean_count || d.total_count || '--', unit: '', label: 'Total Cleans' },
-      { val: d.total_clean_duration ? d.total_clean_duration + 'h' : (d.total_time || '--'), unit: '', label: 'Total Time' },
+      { val: fmt(d.total_area ?? d.total_area_all), unit: 'm²', label: 'Total Area' },
+      { val: fmt(d.total_clean_count ?? d.total_count), unit: '', label: 'Total Cleans' },
+      { val: d.total_clean_duration_display || (d.total_clean_duration != null ? d.total_clean_duration + 'min' : '--'), unit: '', label: 'Total Time' },
       { val: d.last_clean_date || '--', unit: '', label: 'Last Clean' },
-      { val: d.last_clean_area || d.last_area || '--', unit: 'm²', label: 'Last Area' },
-      { val: d.last_clean_duration ? Math.round(d.last_clean_duration) + 'min' : (d.last_duration || '--'), unit: '', label: 'Last Duration' },
+      { val: fmt(d.last_clean_area ?? d.last_area), unit: 'm²', label: 'Last Area' },
+      { val: d.last_clean_duration != null ? Math.round(d.last_clean_duration) + 'min' : '--', unit: '', label: 'Last Duration' },
     ];
     area.innerHTML = stats.map(s =>
       `<div class="hist-stat"><div class="hist-val">${s.val}${s.unit && s.val !== '--' ? '<small> ' + s.unit + '</small>' : ''}</div><div class="hist-label">${s.label}</div></div>`

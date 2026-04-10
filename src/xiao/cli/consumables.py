@@ -18,7 +18,7 @@ def _vacuum():
 
 @app.callback(invoke_without_command=True)
 def consumables(ctx: typer.Context):
-    """Show consumable status."""
+    """Show consumable status (main brush, side brush, filter, mop)."""
     if ctx.invoked_subcommand is not None:
         return
     vac = _vacuum()
@@ -31,12 +31,24 @@ def consumables(ctx: typer.Context):
 
 @app.command()
 def reset(
-    component: str = typer.Argument(help="Consumable to reset: main_brush, side_brush, filter, sensor"),
+    component: str = typer.Argument(
+        help="Consumable to reset: main_brush, side_brush, filter, mop, or 'all'"
+    ),
 ):
-    """Reset a consumable counter."""
+    """Reset a consumable counter after replacing the physical part."""
     vac = _vacuum()
-    try:
-        vac.consumable_reset(component)
-        rprint(f"[green]{component} counter reset.[/green]")
-    except ValueError as e:
-        rprint(f"[red]{e}[/red]")
+    if component == "all":
+        results = vac.consumable_reset_all()
+        for name, result in results.items():
+            if result.get("ok"):
+                rprint(f"  [green]✓ {name} reset[/green]")
+            else:
+                err = result.get("error") or f"code {result.get('code')}"
+                rprint(f"  [red]✗ {name}: {err}[/red]")
+        rprint("[green]All consumables reset.[/green]")
+    else:
+        try:
+            vac.consumable_reset(component)
+            rprint(f"[green]✓ {component} counter reset.[/green]")
+        except ValueError as e:
+            rprint(f"[red]{e}[/red]")

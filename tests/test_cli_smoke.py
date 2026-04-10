@@ -117,6 +117,17 @@ class TestCLISchedule:
         assert result.exit_code == 0
 
 
+class TestCLIRooms:
+    def test_rooms_rename(self):
+        from xiao.cli.app import app
+
+        with patch("xiao.cli.rooms.set_room_alias") as mock_set_room_alias:
+            result = runner.invoke(app, ["rooms", "rename", "7", "Kitchen"])
+
+        assert result.exit_code == 0
+        mock_set_room_alias.assert_called_once_with(7, "Kitchen")
+
+
 class TestCLISetup:
     def test_setup_show(self):
         from xiao.cli.app import app
