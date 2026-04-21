@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import json
+import logging
+import os
 import sys
 
 import typer
@@ -10,6 +12,7 @@ from rich import print as rprint
 from rich.console import Console
 
 from xiao.cli import clean, consumables, device, rooms, schedule, settings, setup
+from xiao.cli import doctor as doctor_mod
 from xiao.cli import map as map_cmd
 from xiao.cli._cta import help_epilog, maybe_show_first_run_cta
 from xiao.core.config import (
@@ -30,14 +33,36 @@ app = typer.Typer(
     name="xiao",
     help="Control your Xiaomi/Roborock vacuum from the terminal.",
     epilog=help_epilog(),
-    no_args_is_help=True,
+    invoke_without_command=True,
+    no_args_is_help=False,
 )
 
 
 @app.callback()
-def _root_callback() -> None:
-    """Run once on every CLI invocation; shows first-run CTA if unshown."""
+def _root_callback(ctx: typer.Context) -> None:
+    """Run on every CLI invocation. Shows the first-run CTA; sets up
+    debug logging when XIAO_DEBUG=1; when no subcommand is given, prints
+    vacuum status if configured, or help otherwise."""
+    if os.environ.get("XIAO_DEBUG") == "1":
+        logging.basicConfig(
+            level=logging.DEBUG,
+            format="[%(levelname)s %(name)s] %(message)s",
+        )
+
     maybe_show_first_run_cta()
+
+    if ctx.invoked_subcommand is None:
+        from xiao.core.config import is_configured
+
+        if is_configured():
+            try:
+                render_status(_vacuum().status())
+            except Exception as e:
+                rprint(f"[red]Failed to fetch status: {e}[/red]")
+                raise typer.Exit(1) from e
+            raise typer.Exit(0)
+        rprint(ctx.get_help())
+        raise typer.Exit(0)
 
 
 app.add_typer(setup.app, name="setup", help="Setup and configure your vacuum.")
@@ -48,6 +73,7 @@ app.add_typer(settings.app, name="settings", help="Device settings.")
 app.add_typer(device.app, name="device", help="Device info and history.")
 app.add_typer(map_cmd.app, name="map", help="Map and room management.")
 app.add_typer(rooms.app, name="rooms", help="Room aliases and management.")
+app.command("doctor")(doctor_mod.doctor)
 
 
 def _cloud_vacuum():

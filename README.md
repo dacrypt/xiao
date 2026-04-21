@@ -61,6 +61,20 @@ playwright install chromium
 
 **Compatibility:** Python 3.12+. Tested against vacuum model `xiaomi.vacuum.c102gl` on Xiaomi Cloud API as of 2024. Token refresh tested with Chromium ≥ 120 (currently running 147).
 
+### Shell completions (optional)
+
+```bash
+xiao --install-completion   # bash / zsh / fish / pwsh — auto-detected
+```
+
+Restart your shell afterwards. `xiao <TAB>` will now complete subcommands.
+
+### Handy defaults
+
+- `xiao` with no subcommand prints the current vacuum status.
+- `XIAO_DEBUG=1 xiao ...` enables verbose logging for issue reports.
+- `XIAO_NO_CTA=1` silences the GitHub-star banner.
+
 ---
 
 ## Prerequisites
