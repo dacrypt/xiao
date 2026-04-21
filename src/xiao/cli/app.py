@@ -39,6 +39,7 @@ def _root_callback() -> None:
     """Run once on every CLI invocation; shows first-run CTA if unshown."""
     maybe_show_first_run_cta()
 
+
 app.add_typer(setup.app, name="setup", help="Setup and configure your vacuum.")
 app.add_typer(clean.app, name="clean", help="Cleaning commands.")
 app.add_typer(consumables.app, name="consumables", help="Consumable status and reset.")
