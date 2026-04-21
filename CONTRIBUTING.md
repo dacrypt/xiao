@@ -60,6 +60,30 @@ If you're adding support for new device properties or actions, refer to the
 [MIoT spec](https://home.miot-spec.com/) for your device model. The mapping
 lives in `src/xiao/core/cloud_vacuum.py`.
 
+## Source-Tree Layout
+
+```
+src/xiao/
+├── cli/           # Typer CLI commands
+│   ├── app.py     # Main entry + top-level commands
+│   ├── clean.py   # Room/zone/spot cleaning
+│   ├── rooms.py   # Room alias management
+│   ├── schedule.py
+│   ├── settings.py
+│   └── setup.py   # Cloud/local setup wizard
+├── core/          # Business logic
+│   ├── cloud.py          # XiaomiCloud client (login, RC4, 2FA, captcha)
+│   ├── cloud_vacuum.py   # CloudVacuumService (MIoT via cloud)
+│   ├── config.py         # TOML config management
+│   ├── token_refresh.py  # Token refresh via Chromium CDP (persistent session)
+│   └── vacuum.py         # Local interface (unused in cloud mode)
+├── dashboard/     # Web UI
+│   ├── server.py  # FastAPI backend
+│   └── index.html # Single-file glassmorphism frontend
+└── ui/
+    └── formatters.py  # Rich terminal formatters
+```
+
 ## Reporting Issues
 
 - Use GitHub Issues for bug reports and feature requests

@@ -1,0 +1,19 @@
+# xiao
+
+> CLI + web dashboard to control a Xiaomi Robot Vacuum X20+ (model: xiaomi.vacuum.c102gl) via the Xiaomi Cloud API. Designed to be driven by LLM agents (Claude, OpenClaw, Cursor, Aider, etc.) as a subprocess tool / skill.
+
+Key facts:
+- Cloud-only: this vacuum model has no local control — all commands go through Xiaomi Cloud with RC4-signed MIoT requests.
+- Tokens expire every ~6-8h. Auto-refresh reuses a persistent Chromium session on CDP port 18800.
+- `xiao` is a CLI first; the Mission Control dashboard and REST API are thin wrappers over the same core.
+
+## Docs
+
+- [README.md](https://github.com/dacrypt/xiao/blob/main/README.md): Full documentation — install, setup, commands, web dashboard, token refresh.
+- [AGENTS.md](https://github.com/dacrypt/xiao/blob/main/AGENTS.md): Agent-oriented reference — prerequisites, canonical commands, intent mapping, error-recovery protocol. Read this if you are an LLM using the tool.
+- [CONTRIBUTING.md](https://github.com/dacrypt/xiao/blob/main/CONTRIBUTING.md): Development setup, tests, source-tree layout, MIoT spec notes.
+
+## Optional
+
+- [CHANGELOG.md](https://github.com/dacrypt/xiao/blob/main/CHANGELOG.md): Release history.
+- [BACKLOG.md](https://github.com/dacrypt/xiao/blob/main/BACKLOG.md): Known open work.
