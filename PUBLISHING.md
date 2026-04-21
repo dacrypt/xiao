@@ -16,7 +16,7 @@ tags) live in [`docs/submissions/_shared.md`](docs/submissions/_shared.md).
 
 | Venue | URL | Submission | Status | Draft |
 |---|---|---|---|---|
-| **skills.sh** (agentskills.io) | https://skills.sh | Publish npm package — auto-indexed | ⏳ **user action:** package scaffolded at [`scripts/skills-sh/`](scripts/skills-sh/), run `npm login && npm publish --access public` from that dir | [`skills-sh.md`](docs/submissions/skills-sh.md) |
+| **skills.sh** (agentskills.io) | https://skills.sh | Publish npm package — auto-indexed | ✅ **published** — [`@dacrypt/xiao-skill@0.1.0`](https://www.npmjs.com/package/@dacrypt/xiao-skill) on npm (2026-04-21); skills.sh indexation typically within 24h | [`skills-sh.md`](docs/submissions/skills-sh.md) |
 | **llms.txt directory** | https://directory.llmstxt.cloud | Tally form (5 min) | ⏳ **user action:** submit https://tally.so/r/wAydjB (needs your email) | [`llms-txt-directory.md`](docs/submissions/llms-txt-directory.md) |
 | **Hermes Skills Hub** (Nous Research) | https://hermes-agent.nousresearch.com/docs/skills | Issue on `0xNyk/awesome-hermes-agent` | ✅ **submitted** — [issue #38](https://github.com/0xNyk/awesome-hermes-agent/issues/38) | [`hermes.md`](docs/submissions/hermes.md) |
 | **Anthropic plugin directory** | https://github.com/anthropics/claude-plugins-official | In-app form at `claude.ai/settings/plugins/submit` | ⏳ **user action:** submit in-app (Claude.ai login required) | [`anthropic-plugin-directory.md`](docs/submissions/anthropic-plugin-directory.md) |
@@ -24,19 +24,22 @@ tags) live in [`docs/submissions/_shared.md`](docs/submissions/_shared.md).
 
 ### What's left for you (venues that need your credentials)
 
-1. **skills.sh** — from repo root:
-   ```bash
-   cp .claude/skills/xiao/SKILL.md scripts/skills-sh/SKILL.md
-   cp AGENTS.md                     scripts/skills-sh/AGENTS.md
-   cd scripts/skills-sh
-   npm login          # one-time
-   npm publish --access public
-   ```
-   The package (`@dacrypt/xiao-skill`) will appear on skills.sh within ~24h.
+1. **llms.txt directory** — open https://tally.so/r/wAydjB, paste the answers from [`docs/submissions/llms-txt-directory.md`](docs/submissions/llms-txt-directory.md), add your email, submit.
 
-2. **llms.txt directory** — open https://tally.so/r/wAydjB, paste the answers from [`docs/submissions/llms-txt-directory.md`](docs/submissions/llms-txt-directory.md), add your email, submit.
+2. **Anthropic plugin directory** — in Claude Code / claude.ai, navigate to `settings/plugins/submit` (or check current docs at [code.claude.com/docs/en/plugins](https://code.claude.com/docs/en/plugins#submit-your-plugin-to-the-official-marketplace)). Use paste-ready answers from [`docs/submissions/anthropic-plugin-directory.md`](docs/submissions/anthropic-plugin-directory.md).
 
-3. **Anthropic plugin directory** — in Claude Code / claude.ai, navigate to `settings/plugins/submit` (or check current docs at [code.claude.com/docs/en/plugins](https://code.claude.com/docs/en/plugins#submit-your-plugin-to-the-official-marketplace)). Use paste-ready answers from [`docs/submissions/anthropic-plugin-directory.md`](docs/submissions/anthropic-plugin-directory.md).
+### Republishing `@dacrypt/xiao-skill` (skills.sh keeps fresh via npm)
+
+Bump `version` in [`scripts/skills-sh/package.json`](scripts/skills-sh/package.json), then from repo root:
+
+```bash
+cp .claude/skills/xiao/SKILL.md scripts/skills-sh/SKILL.md
+cp AGENTS.md                    scripts/skills-sh/AGENTS.md
+cd scripts/skills-sh
+npm publish --access public
+```
+
+Requires `npm login` (session usually cached) and that your npm 2FA is set to "Authorization only" (not "Authorization and writes") — npm CLI doesn't support passkeys mid-publish.
 
 ## Tier 2 — MCP ecosystem (requires MCP wrapper, ~1–2 h extra work)
 
