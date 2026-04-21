@@ -37,8 +37,10 @@ def get_device() -> tuple[str, str, str]:
     if not ip or not token:
         from rich import print as rprint
 
+        from xiao.core.exit_codes import EXIT_NOT_CONFIGURED
+
         rprint("[red]No device configured.[/red] Run [bold]xiao setup init[/bold] first.")
-        raise SystemExit(1)
+        raise SystemExit(EXIT_NOT_CONFIGURED)
     return ip, token, model or ""
 
 
