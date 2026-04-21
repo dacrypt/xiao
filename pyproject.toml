@@ -43,6 +43,9 @@ dependencies = [
     "uvicorn[standard]>=0.42.0",
 ]
 
+[project.optional-dependencies]
+mcp = ["mcp>=1.0"]
+
 [project.urls]
 Homepage = "https://github.com/dacrypt/xiao"
 Repository = "https://github.com/dacrypt/xiao"

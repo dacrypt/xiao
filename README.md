@@ -72,6 +72,33 @@ docker run --rm -v "$HOME/.config/xiao:/root/.config/xiao" \
 
 (On macOS the host path is `~/Library/Application Support/xiao`.)
 
+### MCP server (optional)
+
+Install with the `mcp` extra and `xiao` exposes vacuum control as a
+[Model Context Protocol](https://modelcontextprotocol.io) server, so
+hosts like Claude Desktop / Cursor / mcp.so can drive the vacuum as
+structured tools (no shelling out):
+
+```bash
+pip install "xiao-cli[mcp]"
+xiao mcp           # speaks MCP over stdio
+```
+
+Host config snippet (Claude Desktop `claude_desktop_config.json`):
+
+```json
+{
+  "mcpServers": {
+    "xiao": { "command": "xiao", "args": ["mcp"] }
+  }
+}
+```
+
+Exposed tools: `status`, `start_cleaning`, `stop_cleaning`,
+`pause_cleaning`, `return_to_dock`, `find_vacuum`, `consumables`,
+`clean_room`, `list_rooms`. The server reuses the same `config.toml` and
+browser profile as the CLI.
+
 **Compatibility:** Python 3.12+. Tested against vacuum model `xiaomi.vacuum.c102gl` on Xiaomi Cloud API as of 2024. Token refresh tested with Chromium ≥ 120 (currently running 147).
 
 ### Shell completions (optional)

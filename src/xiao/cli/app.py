@@ -76,6 +76,21 @@ app.add_typer(rooms.app, name="rooms", help="Room aliases and management.")
 app.command("doctor")(doctor_mod.doctor)
 
 
+@app.command("mcp")
+def mcp_cmd() -> None:
+    """Run an MCP server exposing vacuum control as structured tools.
+
+    Requires the `mcp` extra: `pip install "xiao-cli[mcp]"`. Speaks
+    MCP over stdio so hosts like Claude Desktop and Cursor can connect.
+    """
+    try:
+        from xiao.mcp_server import run
+    except RuntimeError as e:
+        rprint(f"[red]{e}[/red]")
+        raise typer.Exit(1) from e
+    run()
+
+
 def _cloud_vacuum():
     """Get a CloudVacuumService, logging in if needed."""
     import requests
