@@ -12,15 +12,31 @@ All per-venue submission copy lives under
 URLs, and checklist for one venue. Shared artefacts (pitch, description,
 tags) live in [`docs/submissions/_shared.md`](docs/submissions/_shared.md).
 
-## Tier 1 — do these first
+## Tier 1 — status
 
 | Venue | URL | Submission | Status | Draft |
 |---|---|---|---|---|
-| **skills.sh** (agentskills.io) | https://skills.sh | Publish npm package — auto-indexed | — | [`skills-sh.md`](docs/submissions/skills-sh.md) |
-| **llms.txt directory** | https://directory.llmstxt.cloud | Tally form (5 min) | — | [`llms-txt-directory.md`](docs/submissions/llms-txt-directory.md) |
-| **Hermes Skills Hub** (Nous Research) | https://hermes-agent.nousresearch.com/docs/skills | Issue on `0xNyk/awesome-hermes-agent` | — | [`hermes.md`](docs/submissions/hermes.md) |
-| **Anthropic plugin directory** | https://github.com/anthropics/claude-plugins-official | Form: `clau.de/plugin-directory-submission` | — | [`anthropic-plugin-directory.md`](docs/submissions/anthropic-plugin-directory.md) |
-| **anthropics/skills cookbook** | https://github.com/anthropics/skills | GitHub PR | — | [`anthropics-skills-cookbook.md`](docs/submissions/anthropics-skills-cookbook.md) |
+| **skills.sh** (agentskills.io) | https://skills.sh | Publish npm package — auto-indexed | ⏳ **user action:** package scaffolded at [`scripts/skills-sh/`](scripts/skills-sh/), run `npm login && npm publish --access public` from that dir | [`skills-sh.md`](docs/submissions/skills-sh.md) |
+| **llms.txt directory** | https://directory.llmstxt.cloud | Tally form (5 min) | ⏳ **user action:** submit https://tally.so/r/wAydjB (needs your email) | [`llms-txt-directory.md`](docs/submissions/llms-txt-directory.md) |
+| **Hermes Skills Hub** (Nous Research) | https://hermes-agent.nousresearch.com/docs/skills | Issue on `0xNyk/awesome-hermes-agent` | ✅ **submitted** — [issue #38](https://github.com/0xNyk/awesome-hermes-agent/issues/38) | [`hermes.md`](docs/submissions/hermes.md) |
+| **Anthropic plugin directory** | https://github.com/anthropics/claude-plugins-official | In-app form at `claude.ai/settings/plugins/submit` | ⏳ **user action:** submit in-app (Claude.ai login required) | [`anthropic-plugin-directory.md`](docs/submissions/anthropic-plugin-directory.md) |
+| **anthropics/skills cookbook** | https://github.com/anthropics/skills | GitHub PR | ✅ **submitted** — [PR #997](https://github.com/anthropics/skills/pull/997) | [`anthropics-skills-cookbook.md`](docs/submissions/anthropics-skills-cookbook.md) |
+
+### What's left for you (venues that need your credentials)
+
+1. **skills.sh** — from repo root:
+   ```bash
+   cp .claude/skills/xiao/SKILL.md scripts/skills-sh/SKILL.md
+   cp AGENTS.md                     scripts/skills-sh/AGENTS.md
+   cd scripts/skills-sh
+   npm login          # one-time
+   npm publish --access public
+   ```
+   The package (`@dacrypt/xiao-skill`) will appear on skills.sh within ~24h.
+
+2. **llms.txt directory** — open https://tally.so/r/wAydjB, paste the answers from [`docs/submissions/llms-txt-directory.md`](docs/submissions/llms-txt-directory.md), add your email, submit.
+
+3. **Anthropic plugin directory** — in Claude Code / claude.ai, navigate to `settings/plugins/submit` (or check current docs at [code.claude.com/docs/en/plugins](https://code.claude.com/docs/en/plugins#submit-your-plugin-to-the-official-marketplace)). Use paste-ready answers from [`docs/submissions/anthropic-plugin-directory.md`](docs/submissions/anthropic-plugin-directory.md).
 
 ## Tier 2 — MCP ecosystem (requires MCP wrapper, ~1–2 h extra work)
 
@@ -46,10 +62,10 @@ A thin MCP server wrapper around `xiao` would expose ~10 tools (`status`,
 
 ## Before submitting anywhere (checklist)
 
-- [ ] `SKILL.md` frontmatter validates (name ≤ 64 chars lowercase, description ≤ 1024 chars, says WHAT and WHEN). Already verified 2026-04-21.
-- [ ] `llms.txt` is reachable at the repo root. Already present.
-- [ ] `AGENTS.md` is current. Already present.
-- [ ] PyPI package `xiao` published and `pip install xiao && xiao --help` works.
-- [ ] A 10-second terminal GIF showing `xiao status --json` exists (for Show HN, Reddit, Dev.to).
-- [ ] Repo description on GitHub is concise and matches the 1-liner pitch.
-- [ ] GitHub topics include: `xiaomi`, `roborock`, `vacuum`, `agent-tool`, `mcp`, `claude-skill`, `llms-txt`, `agents-md`.
+- [x] `SKILL.md` frontmatter validates (name ≤ 64 chars lowercase, description ≤ 1024 chars, says WHAT and WHEN). Verified 2026-04-21.
+- [x] `llms.txt` is reachable at the repo root.
+- [x] `AGENTS.md` is current.
+- [x] PyPI package `xiao` published (`v0.1.2`) and `pip install xiao && xiao --help` works.
+- [x] Repo description on GitHub matches the 1-liner pitch.
+- [x] GitHub topics include: `xiaomi`, `roborock`, `vacuum`, `robot-vacuum`, `agent-tool`, `llm-tool`, `mcp`, `claude-skill`, `agents-md`, `llms-txt`, `home-automation`, `cli`, `python`, `smart-home`, `iot`. Set 2026-04-21.
+- [ ] A 10-second terminal GIF showing `xiao status --json` (for Show HN, Reddit, Dev.to). Still pending — record with e.g. `asciinema` or `vhs`.
