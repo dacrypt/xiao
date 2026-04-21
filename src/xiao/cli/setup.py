@@ -9,6 +9,7 @@ from rich.panel import Panel
 from rich.prompt import Confirm, Prompt
 from rich.table import Table
 
+from xiao.cli._cta import show_star_banner
 from xiao.core import config
 
 console = Console()
@@ -111,6 +112,8 @@ def init():
     # Test connection
     if Confirm.ask("Test connection now?", default=True):
         _test_connection(ip, token, model, protocol)
+
+    show_star_banner()
 
 
 @app.command()
@@ -302,6 +305,8 @@ def cloud():
                 render_status(status)
             except Exception as e:
                 rprint(f"[red]Test failed: {e}[/red]")
+
+        show_star_banner()
 
     except ImportError as e:
         rprint(f"[red]Missing dependency: {e}[/red]")

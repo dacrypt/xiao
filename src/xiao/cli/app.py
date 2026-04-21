@@ -11,6 +11,7 @@ from rich.console import Console
 
 from xiao.cli import clean, consumables, device, rooms, schedule, settings, setup
 from xiao.cli import map as map_cmd
+from xiao.cli._cta import help_epilog, maybe_show_first_run_cta
 from xiao.core.config import (
     get_cloud_config,
     get_cloud_session,
@@ -28,8 +29,15 @@ console = Console()
 app = typer.Typer(
     name="xiao",
     help="Control your Xiaomi/Roborock vacuum from the terminal.",
+    epilog=help_epilog(),
     no_args_is_help=True,
 )
+
+
+@app.callback()
+def _root_callback() -> None:
+    """Run once on every CLI invocation; shows first-run CTA if unshown."""
+    maybe_show_first_run_cta()
 
 app.add_typer(setup.app, name="setup", help="Setup and configure your vacuum.")
 app.add_typer(clean.app, name="clean", help="Cleaning commands.")
