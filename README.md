@@ -12,6 +12,8 @@ CLI + web dashboard to control a **Xiaomi Robot Vacuum X20+** (model: `xiaomi.va
 
 > **Agent-first.** `xiao` is designed to be driven by LLM agents (Claude, OpenClaw, Cursor, Aider, Codex…) as a subprocess. If you are an agent reading this repo, start with [AGENTS.md](AGENTS.md).
 
+![xiao demo](docs/demo/demo.gif)
+
 ---
 
 ## Agent Quick Reference

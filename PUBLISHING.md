@@ -127,4 +127,4 @@ A thin MCP server wrapper around `xiao` would expose ~10 tools (`status`,
 - [x] PyPI package `xiao-cli` published and `pip install xiao-cli && xiao --help` works.
 - [x] Repo description on GitHub matches the 1-liner pitch.
 - [x] GitHub topics include: `xiaomi`, `roborock`, `vacuum`, `robot-vacuum`, `agent-tool`, `llm-tool`, `mcp`, `claude-skill`, `agents-md`, `llms-txt`, `home-automation`, `cli`, `python`, `smart-home`, `iot`. Set 2026-04-21.
-- [ ] A 10-second terminal GIF showing `xiao status --json` (for Show HN, Reddit, Dev.to). Still pending — record with e.g. `asciinema` or `vhs`.
+- [x] A 10-second terminal GIF showing `xiao status` / `--json` / consumables. See [`docs/demo/demo.gif`](docs/demo/demo.gif); regenerate with `vhs docs/demo/demo.tape`.
