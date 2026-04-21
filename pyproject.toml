@@ -1,5 +1,5 @@
 [project]
-name = "xiao"
+name = "xiao-cli"
 version = "0.1.2"
 description = "CLI tool and web dashboard to control Xiaomi/Roborock robot vacuums via cloud API"
 readme = "README.md"

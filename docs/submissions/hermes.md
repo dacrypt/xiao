@@ -42,7 +42,7 @@ station, settings, consumables) as a subprocess any agent can exec.
 ## Install & verify
 
 ```bash
-pip install xiao
+pip install xiao-cli
 playwright install chromium
 xiao --help
 xiao status --json  # emits parseable JSON

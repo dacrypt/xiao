@@ -18,7 +18,7 @@ CLI + web dashboard to control a **Xiaomi Robot Vacuum X20+** (model: `xiaomi.va
 | Fact | Value |
 |---|---|
 | Tool name | `xiao` |
-| Install | `pip install xiao` |
+| Install | `pip install xiao-cli` |
 | Verify | `xiao --help` → lists subcommands; exits 0 |
 | State command | `xiao status` (Rich panel) or `xiao status --json` (machine-readable) |
 | Machine-readable | `xiao status --json` / `xiao consumables --json`; or `xiao web` → `GET /api/status` |
@@ -44,7 +44,7 @@ CLI + web dashboard to control a **Xiaomi Robot Vacuum X20+** (model: `xiaomi.va
 ## Installation
 
 ```bash
-pip install xiao
+pip install xiao-cli
 # or from source
 git clone https://github.com/dacrypt/xiao.git
 cd xiao && uv sync
@@ -360,7 +360,7 @@ Because `xiao` is just a CLI, teaching an agent to drive your vacuum is really j
 > (https://github.com/dacrypt/xiao). Read AGENTS.md from that repo and
 > follow its instructions. Then set it up end-to-end:
 >
-> 1. Install:    pip install xiao && playwright install chromium
+> 1. Install:    pip install xiao-cli && playwright install chromium
 > 2. Verify:     xiao --help
 > 3. Walk me through `xiao setup cloud` interactively (ask me for email,
 >    password, region — one of us/cn/eu/ru/sg/tw/i2 — then discover device).

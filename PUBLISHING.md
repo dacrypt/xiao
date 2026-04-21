@@ -124,7 +124,7 @@ A thin MCP server wrapper around `xiao` would expose ~10 tools (`status`,
 - [x] `SKILL.md` frontmatter validates (name ≤ 64 chars lowercase, description ≤ 1024 chars, says WHAT and WHEN). Verified 2026-04-21.
 - [x] `llms.txt` is reachable at the repo root.
 - [x] `AGENTS.md` is current.
-- [x] PyPI package `xiao` published (`v0.1.2`) and `pip install xiao && xiao --help` works.
+- [x] PyPI package `xiao-cli` published and `pip install xiao-cli && xiao --help` works.
 - [x] Repo description on GitHub matches the 1-liner pitch.
 - [x] GitHub topics include: `xiaomi`, `roborock`, `vacuum`, `robot-vacuum`, `agent-tool`, `llm-tool`, `mcp`, `claude-skill`, `agents-md`, `llms-txt`, `home-automation`, `cli`, `python`, `smart-home`, `iot`. Set 2026-04-21.
 - [ ] A 10-second terminal GIF showing `xiao status --json` (for Show HN, Reddit, Dev.to). Still pending — record with e.g. `asciinema` or `vhs`.

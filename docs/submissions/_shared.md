@@ -10,7 +10,7 @@ Copy from here; don't rewrite per venue.
 
 > `xiao` controls a Xiaomi / Roborock X20+ robot vacuum via the Xiaomi Cloud API (RC4-signed MIoT calls). It was built specifically so LLM agents — Claude, OpenClaw, Cursor, Aider, Codex, Gemini CLI — can drive the vacuum end to end: start a clean, send it to dock, read battery, report consumable life, set fan/water levels, manage zones and rooms, and recover from token expiry autonomously. The CLI is first-class: the dashboard and REST API are thin layers over the same core.
 >
-> What makes `xiao` different from typical smart-home CLIs is the agent-ready packaging. The repo ships an `AGENTS.md` (cross-tool canonical reference following agents.md spec), an `llms.txt` (per llmstxt.org), a Claude Code skill at `.claude/skills/xiao/SKILL.md` (agentskills.io format), `--json` output on read commands for deterministic parsing, and a small set of canonical exit codes (`2 = not configured`, `77 = auth failed`) so agents can dispatch retries without parsing stderr. Installation is `pip install xiao` + `playwright install chromium`. MIT-licensed, tested against vacuum model `xiaomi.vacuum.c102gl` on Xiaomi Cloud as of 2024. Repo: https://github.com/dacrypt/xiao.
+> What makes `xiao` different from typical smart-home CLIs is the agent-ready packaging. The repo ships an `AGENTS.md` (cross-tool canonical reference following agents.md spec), an `llms.txt` (per llmstxt.org), a Claude Code skill at `.claude/skills/xiao/SKILL.md` (agentskills.io format), `--json` output on read commands for deterministic parsing, and a small set of canonical exit codes (`2 = not configured`, `77 = auth failed`) so agents can dispatch retries without parsing stderr. Installation is `pip install xiao-cli` + `playwright install chromium`. MIT-licensed, tested against vacuum model `xiaomi.vacuum.c102gl` on Xiaomi Cloud as of 2024. Repo: https://github.com/dacrypt/xiao.
 
 ## Pitch bullets (use for forms that want feature lists)
 
@@ -29,7 +29,7 @@ Copy from here; don't rewrite per venue.
 ## URLs
 
 - Repo: https://github.com/dacrypt/xiao
-- PyPI: https://pypi.org/project/xiao/
+- PyPI: https://pypi.org/project/xiao-cli/
 - Issues: https://github.com/dacrypt/xiao/issues
 - Canonical agent guide: https://github.com/dacrypt/xiao/blob/main/AGENTS.md
 - Skill definition: https://github.com/dacrypt/xiao/blob/main/.claude/skills/xiao/SKILL.md

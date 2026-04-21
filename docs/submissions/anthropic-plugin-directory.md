@@ -83,7 +83,7 @@ MIT
 
 ### Installation command
 ```
-pip install xiao && playwright install chromium
+pip install xiao-cli && playwright install chromium
 ```
 
 ### Verification command
@@ -100,5 +100,5 @@ xiao --help
 
 - [ ] Make sure the GitHub repo is public and has a clear README (done).
 - [ ] Make sure `LICENSE` file is present (done — MIT).
-- [ ] Confirm `pip install xiao` actually works from a fresh environment.
+- [ ] Confirm `pip install xiao-cli` actually works from a fresh environment.
 - [ ] Have a 1-minute screen recording ready in case review asks for a demo.

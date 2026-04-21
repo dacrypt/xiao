@@ -4,7 +4,7 @@
   "include-v-in-tag": true,
   "packages": {
     ".": {
-      "package-name": "xiao",
+      "package-name": "xiao-cli",
       "changelog-path": "CHANGELOG.md",
       "include-component-in-tag": false,
       "changelog-sections": [

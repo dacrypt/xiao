@@ -1511,7 +1511,7 @@ wheels = [
 ]
 
 [[package]]
-name = "xiao"
+name = "xiao-cli"
 version = "0.1.2"
 source = { editable = "." }
 dependencies = [
