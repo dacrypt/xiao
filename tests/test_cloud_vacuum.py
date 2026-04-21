@@ -34,10 +34,10 @@ class TestCloudVacuumStatus:
           siid 2 piid 5 = dry-left-time (minutes)
         """
         mock_results = [
-            {"siid": 2, "piid": 1, "code": 0, "value": 5},   # status = Go Charging
+            {"siid": 2, "piid": 1, "code": 0, "value": 5},  # status = Go Charging
             {"siid": 3, "piid": 1, "code": 0, "value": 85},  # Battery 85%
-            {"siid": 3, "piid": 2, "code": 0, "value": 1},   # Charging state
-            {"siid": 2, "piid": 3, "code": 0, "value": 1},   # mode = Basic/Standard (fan speed)
+            {"siid": 3, "piid": 2, "code": 0, "value": 1},  # Charging state
+            {"siid": 2, "piid": 3, "code": 0, "value": 1},  # mode = Basic/Standard (fan speed)
         ]
         with patch("xiao.core.cloud_vacuum.cloud_get_properties", return_value=mock_results):
             data = vacuum.status()
@@ -65,8 +65,7 @@ class TestCloudVacuumStatus:
         with patch("xiao.core.cloud_vacuum.cloud_get_properties", return_value=mock_results):
             data = vacuum.status()
         # fan_speed should NOT appear for piid=2 data
-        assert "fan_speed" not in data, \
-            "siid 2 piid 2 is device fault, not fan speed — should not populate fan_speed"
+        assert "fan_speed" not in data, "siid 2 piid 2 is device fault, not fan speed — should not populate fan_speed"
 
 
 class TestCloudVacuumConsumables:
@@ -151,7 +150,7 @@ class TestCloudVacuumHistory:
         ]
         with patch("xiao.core.cloud_vacuum.cloud_get_properties", return_value=mock_results):
             data = vacuum.clean_history()
-        assert data["first_clean_date"] == "2024-03-21 00:46"
+        assert data["first_clean_date"] == "2024-03-21 05:46 UTC"
         assert data["total_clean_duration"] == 120
         assert data["total_clean_count"] == 5
         assert data["total_area"] == 250000000
@@ -166,7 +165,7 @@ class TestCloudVacuumHistory:
         ]
         with patch("xiao.core.cloud_vacuum.cloud_get_properties", return_value=mock_results):
             data = vacuum.last_clean()
-        assert data["first_clean_date"] == "2024-03-21 00:46"
+        assert data["first_clean_date"] == "2024-03-21 05:46 UTC"
         assert "last_clean_date" not in data
 
 
@@ -182,7 +181,9 @@ class TestCloudVacuumFanSpeed:
             speed = vacuum.fan_speed()
         # Verify it queried piid=3
         called_props = mock_get.call_args[0][2]  # third positional arg = props list
-        assert any(p.get("piid") == 3 for p in called_props), "fan_speed() should read piid=3 (mode), not piid=2 (fault)"
+        assert any(p.get("piid") == 3 for p in called_props), (
+            "fan_speed() should read piid=3 (mode), not piid=2 (fault)"
+        )
         assert speed == "standard"
 
     def test_fan_speed_named(self, vacuum):
@@ -203,8 +204,12 @@ class TestCloudVacuumFanSpeed:
         with patch("xiao.core.cloud_vacuum.cloud_set_properties", return_value=[{"code": 0}]) as mock_set:
             vacuum.set_fan_speed("turbo")
         called_props = mock_set.call_args[0][2]  # third positional arg = props list
-        assert any(p.get("piid") == 3 for p in called_props), "set_fan_speed() should write piid=3 (mode), not piid=2 (fault)"
-        assert all(p.get("piid") != 2 for p in called_props), "set_fan_speed() must NOT write to piid=2 (fault — read-only!)"
+        assert any(p.get("piid") == 3 for p in called_props), (
+            "set_fan_speed() should write piid=3 (mode), not piid=2 (fault)"
+        )
+        assert all(p.get("piid") != 2 for p in called_props), (
+            "set_fan_speed() must NOT write to piid=2 (fault — read-only!)"
+        )
 
     def test_set_fan_speed_valid(self, vacuum):
         with patch("xiao.core.cloud_vacuum.cloud_set_properties", return_value=[{"code": 0}]) as mock:
@@ -218,15 +223,16 @@ class TestCloudVacuumFanSpeed:
     def test_status_fan_speed_reads_from_piid3(self, vacuum):
         """status() fan_speed parsing must come from siid=2 piid=3 (mode), not piid=2 (fault)."""
         mock_results = [
-            {"siid": 2, "piid": 1, "code": 0, "value": 6},   # status = Charging
-            {"siid": 2, "piid": 3, "code": 0, "value": 2},   # mode (fan) = Medium/Strong
+            {"siid": 2, "piid": 1, "code": 0, "value": 6},  # status = Charging
+            {"siid": 2, "piid": 3, "code": 0, "value": 2},  # mode (fan) = Medium/Strong
         ]
         with patch("xiao.core.cloud_vacuum.cloud_get_properties", return_value=mock_results):
             data = vacuum.status()
         # siid 2, piid 3, value=2 should be "Medium" or "Strong" fan speed
         assert "fan_speed" in data, "status() should include fan_speed from piid=3"
-        assert data["fan_speed"] in ("medium", "Medium", "Strong", "strong"), \
+        assert data["fan_speed"] in ("medium", "Medium", "Strong", "strong"), (
             f"value=2 should decode to medium/strong, got: {data['fan_speed']}"
+        )
 
 
 class TestCloudVacuumVolume:
@@ -285,7 +291,7 @@ class TestCloudVacuumHistoryDisplay:
         ]
         with patch("xiao.core.cloud_vacuum.cloud_get_properties", return_value=mock_results):
             data = vacuum.clean_history()
-        assert data.get("first_clean_date") == "2024-03-21 00:46"
+        assert data.get("first_clean_date") == "2024-03-21 05:46 UTC"
         assert data.get("total_clean_duration") == 35
         assert data.get("total_clean_count") == 42
         assert data.get("total_area") == 250000000
@@ -319,10 +325,12 @@ class TestCloudVacuumWaterLevel:
         with patch("xiao.core.cloud_vacuum.cloud_set_properties", return_value=[{"code": 0}]) as mock_set:
             vacuum.set_water_level("medium")
         called_props = mock_set.call_args[0][2]
-        assert any(p.get("siid") == 4 and p.get("piid") == 5 for p in called_props), \
+        assert any(p.get("siid") == 4 and p.get("piid") == 5 for p in called_props), (
             "set_water_level() should write to siid=4 piid=5 (mop-mode)"
-        assert not any(p.get("siid") == 18 and p.get("piid") == 1 for p in called_props), \
+        )
+        assert not any(p.get("siid") == 18 and p.get("piid") == 1 for p in called_props), (
             "set_water_level() must NOT write to siid=18 piid=1 (mop-life-level, read-only!)"
+        )
 
     def test_set_water_level_low_value(self, vacuum):
         """low → value 1 per official spec."""
@@ -359,8 +367,9 @@ class TestCloudVacuumWaterLevel:
         with patch("xiao.core.cloud_vacuum.cloud_get_properties", return_value=mock_results) as mock_get:
             data = vacuum.water_level()
         called_props = mock_get.call_args[0][2]
-        assert any(p.get("siid") == 4 and p.get("piid") == 5 for p in called_props), \
+        assert any(p.get("siid") == 4 and p.get("piid") == 5 for p in called_props), (
             "water_level() should read from siid=4 piid=5 (mop-mode)"
+        )
         assert data.get("water_level") == "medium"
         assert data.get("water_level_raw") == 2
 
@@ -382,8 +391,7 @@ class TestCloudVacuumStatusCodes:
         mock_results = [{"siid": 2, "piid": 1, "code": 0, "value": 13}]
         with patch("xiao.core.cloud_vacuum.cloud_get_properties", return_value=mock_results):
             data = vacuum.status()
-        assert data["state"] == "Charging Completed", \
-            "Status 13 should be 'Charging Completed' per official MIoT spec"
+        assert data["state"] == "Charging Completed", "Status 13 should be 'Charging Completed' per official MIoT spec"
 
     def test_status_21_is_washing_mop_pause(self, vacuum):
         """Official spec: status 21 = 'WashingMopPause' (NOT water tank alert)."""
@@ -392,13 +400,15 @@ class TestCloudVacuumStatusCodes:
             data = vacuum.status()
         # Per official spec it's WashingMopPause; our code has ⚠️ Water Tank Alert as a warning
         # Keep the user-friendly alert label but note official name
-        assert "21" in str(data["state"]) or "WashingMop" in str(data["state"]) or "Water" in str(data["state"]), \
+        assert "21" in str(data["state"]) or "WashingMop" in str(data["state"]) or "Water" in str(data["state"]), (
             f"Status 21 should be either WashingMopPause or Water Tank Alert, got: {data['state']}"
+        )
 
     def test_status_9_is_washing(self, vacuum):
         """Official spec: status 9 = 'Washing' (was 'Washing mop' with lowercase mop)."""
         mock_results = [{"siid": 2, "piid": 1, "code": 0, "value": 9}]
         with patch("xiao.core.cloud_vacuum.cloud_get_properties", return_value=mock_results):
             data = vacuum.status()
-        assert data["state"] in ("Washing", "Washing mop", "Washing Mop"), \
+        assert data["state"] in ("Washing", "Washing mop", "Washing Mop"), (
             f"Status 9 should be washing-related, got: {data['state']}"
+        )

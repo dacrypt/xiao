@@ -38,8 +38,8 @@ logger = logging.getLogger(__name__)
 MIOT_SPEC = {
     # siid 2 = sweep
     "sweep_status": {"siid": 2, "piid": 1},  # Status enum
-    "fault_code": {"siid": 2, "piid": 2},   # Device Fault (read-only, uint8 0-255) — NOT fan speed
-    "fan_level": {"siid": 2, "piid": 3},    # Mode / fan speed (0=Silent, 1=Basic, 2=Strong, 3=Full Speed)
+    "fault_code": {"siid": 2, "piid": 2},  # Device Fault (read-only, uint8 0-255) — NOT fan speed
+    "fan_level": {"siid": 2, "piid": 3},  # Mode / fan speed (0=Silent, 1=Basic, 2=Strong, 3=Full Speed)
     "dry_left_time": {"siid": 2, "piid": 5},  # Dry Left Time (minutes, read-only)
     # siid 3 = battery
     "battery_level": {"siid": 3, "piid": 1},  # Battery percentage
@@ -67,15 +67,15 @@ MIOT_SPEC = {
     "schedules": {"siid": 8, "piid": 2},
     # siid 18 = mop consumable (read-only)
     "mop_life_level": {"siid": 18, "piid": 1},  # Mop life remaining (%) — READ-ONLY, NOT water level
-    "mop_left_time": {"siid": 18, "piid": 2},   # Mop hours remaining
+    "mop_left_time": {"siid": 18, "piid": 2},  # Mop hours remaining
     # siid 2 = fault
     "fault": {"siid": 2, "piid": 2},
     # siid 4 = vacuum-extend (Xiaomi-specific service, not standard MIoT)
-    "mop_mode": {"siid": 4, "piid": 5},          # mop-mode / water level (1=Low, 2=Medium, 3=High) — WRITABLE
+    "mop_mode": {"siid": 4, "piid": 5},  # mop-mode / water level (1=Low, 2=Medium, 3=High) — WRITABLE
     "break_point_restart": {"siid": 4, "piid": 11},  # Resume after charge (0=Off, 1=On) — writable
-    "carpet_press": {"siid": 4, "piid": 12},     # Carpet boost (0=Off, 1=On) — writable
-    "child_lock": {"siid": 4, "piid": 27},       # Child lock (0=Off, 1=On) — writable
-    "clean_rags_tip": {"siid": 4, "piid": 16},   # Mop wash reminder interval (minutes, 0-120) — writable
+    "carpet_press": {"siid": 4, "piid": 12},  # Carpet boost (0=Off, 1=On) — writable
+    "child_lock": {"siid": 4, "piid": 27},  # Child lock (0=Off, 1=On) — writable
+    "clean_rags_tip": {"siid": 4, "piid": 16},  # Mop wash reminder interval (minutes, 0-120) — writable
     "clean_extend_data": {"siid": 4, "piid": 10},  # Room/zone clean params (write-only string JSON)
 }
 
@@ -328,7 +328,7 @@ class CloudVacuumService:
         return dnd
 
     def set_dnd(self, enabled: bool, start: str | None = None, end: str | None = None) -> list:
-        props = [{"siid": 5, "piid": 1, "value": enabled}]
+        props: list[dict[str, Any]] = [{"siid": 5, "piid": 1, "value": enabled}]
         if start:
             props.append({"siid": 5, "piid": 2, "value": start})
         if end:
@@ -415,7 +415,7 @@ class CloudVacuumService:
         Older code incorrectly treated piid 1 as last-clean-time, which produced stale/misleading
         `last_clean_date` values.
         """
-        from datetime import datetime
+        from datetime import UTC, datetime
 
         props = [
             {"siid": 12, "piid": 1},  # first-clean-time (unix timestamp)
@@ -440,7 +440,7 @@ class CloudVacuumService:
 
         ts = data.pop("first_clean_timestamp", None)
         if ts and isinstance(ts, int) and ts > 1_000_000_000:
-            data["first_clean_date"] = datetime.fromtimestamp(ts).strftime("%Y-%m-%d %H:%M")
+            data["first_clean_date"] = datetime.fromtimestamp(ts, tz=UTC).strftime("%Y-%m-%d %H:%M UTC")
 
         # Add human-readable duration display (raw value is minutes)
         # e.g. 130 → "2h 10min", 45 → "45min", 0 → "0min"
@@ -461,7 +461,7 @@ class CloudVacuumService:
         We return the spec-backed clean-log totals plus the first clean date instead of mislabeling
         first-clean-time as the last run.
         """
-        from datetime import datetime
+        from datetime import UTC, datetime
 
         props = [
             MIOT_SPEC["first_clean_time"],
@@ -484,7 +484,7 @@ class CloudVacuumService:
 
         ts = data.pop("first_clean_timestamp", None)
         if ts and isinstance(ts, int) and ts > 1_000_000_000:
-            data["first_clean_date"] = datetime.fromtimestamp(ts).strftime("%Y-%m-%d %H:%M")
+            data["first_clean_date"] = datetime.fromtimestamp(ts, tz=UTC).strftime("%Y-%m-%d %H:%M UTC")
 
         return data
 
@@ -916,7 +916,7 @@ class CloudVacuumService:
             key = f"s{siid}_p{piid}"
             data[key] = val
 
-        from datetime import datetime
+        from datetime import UTC, datetime
 
         # Build structured response
         result: dict[str, Any] = {
@@ -929,9 +929,9 @@ class CloudVacuumService:
             },
             "status": {
                 "state": data.get("s2_p1", 0),
-                "fault_code": data.get("s2_p2", 0),          # siid 2 piid 2 = device fault (0-255)
-                "fan_speed_mode": data.get("s2_p3", 0),       # siid 2 piid 3 = mode/fan (0=Silent..3=Full)
-                "dry_left_time_min": data.get("s2_p5", 0),    # siid 2 piid 5 = dry left time (minutes)
+                "fault_code": data.get("s2_p2", 0),  # siid 2 piid 2 = device fault (0-255)
+                "fan_speed_mode": data.get("s2_p3", 0),  # siid 2 piid 3 = mode/fan (0=Silent..3=Full)
+                "dry_left_time_min": data.get("s2_p5", 0),  # siid 2 piid 5 = dry left time (minutes)
             },
             "battery": {
                 "level": data.get("s3_p1", 0),
@@ -977,6 +977,6 @@ class CloudVacuumService:
         ts = data.get("s12_p1")
         if ts and isinstance(ts, int) and ts > 1_000_000_000:
             result["history"]["first_clean_timestamp"] = ts
-            result["history"]["first_clean_date"] = datetime.fromtimestamp(ts).strftime("%Y-%m-%d %H:%M")
+            result["history"]["first_clean_date"] = datetime.fromtimestamp(ts, tz=UTC).strftime("%Y-%m-%d %H:%M UTC")
 
         return result

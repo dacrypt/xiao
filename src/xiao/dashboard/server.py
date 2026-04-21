@@ -231,9 +231,9 @@ def create_app() -> FastAPI:
 
         aliases = get_rooms()
         # Known room IDs from device schedules
-        known_ids = {1, 2, 3, 4, 6, 7, 8, 10, 12}
-        for rid in aliases:
-            known_ids.add(int(rid))
+        known_ids: set[int] = {1, 2, 3, 4, 6, 7, 8, 10, 12}
+        for alias_id in aliases:
+            known_ids.add(int(alias_id))
         rooms = []
         for rid in sorted(known_ids):
             rooms.append({"id": rid, "name": aliases.get(str(rid), f"Room {rid}")})

@@ -37,8 +37,10 @@ def get_device() -> tuple[str, str, str]:
     if not ip or not token:
         from rich import print as rprint
 
+        from xiao.core.exit_codes import EXIT_NOT_CONFIGURED
+
         rprint("[red]No device configured.[/red] Run [bold]xiao setup init[/bold] first.")
-        raise SystemExit(1)
+        raise SystemExit(EXIT_NOT_CONFIGURED)
     return ip, token, model or ""
 
 
@@ -59,15 +61,24 @@ def get_cloud_config() -> dict:
     return cfg.get("cloud", {})
 
 
-def save_cloud_session(user_id: str, service_token: str, ssecurity: str) -> None:
-    """Persist cloud session tokens so we don't re-login every time."""
+def save_cloud_session(
+    user_id: str | None,
+    service_token: str | None,
+    ssecurity: str | None,
+) -> None:
+    """Persist cloud session tokens so we don't re-login every time.
+
+    Accepts `None` on any field for caller convenience (dict.get / attribute
+    access may return None during login); empty strings are coerced so the
+    TOML writer doesn't choke on `None`.
+    """
     cfg = load()
     if "cloud" not in cfg:
         cfg["cloud"] = {}
     cfg["cloud"]["session"] = {
-        "user_id": user_id,
-        "service_token": service_token,
-        "ssecurity": ssecurity,
+        "user_id": user_id or "",
+        "service_token": service_token or "",
+        "ssecurity": ssecurity or "",
     }
     save(cfg)
 

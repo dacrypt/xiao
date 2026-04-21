@@ -60,6 +60,107 @@ class TestCLIConsumables:
         assert result.exit_code == 0
 
 
+class TestJSONOutput:
+    """Verify the --json / -j flag produces valid, parseable JSON.
+
+    These tests are the contract that AGENTS.md promises to agents: any
+    read command with --json emits a single JSON document on stdout and
+    exits 0. Break this and agents can no longer parse output.
+    """
+
+    def test_status_json(self, mock_vacuum):
+        import json as _json
+
+        from xiao.cli.app import app
+
+        with patch("xiao.cli.app._vacuum", return_value=mock_vacuum):
+            result = runner.invoke(app, ["status", "--json"])
+        assert result.exit_code == 0
+        parsed = _json.loads(result.output)
+        assert parsed["state"] == "In Dock"
+        assert parsed["battery"] == 100
+
+    def test_status_full_json(self, mock_vacuum):
+        """--full --json must also produce valid JSON, falling back to
+        vac.status() if full_status() isn't available on the mock."""
+        import json as _json
+
+        from xiao.cli.app import app
+
+        # mock_vacuum doesn't have full_status → AttributeError path → falls
+        # back to status() dict, which must still serialize.
+        mock_vacuum.full_status.side_effect = AttributeError("no full_status")
+        with patch("xiao.cli.app._vacuum", return_value=mock_vacuum):
+            result = runner.invoke(app, ["status", "--full", "--json"])
+        assert result.exit_code == 0
+        parsed = _json.loads(result.output)
+        assert "state" in parsed
+
+    def test_status_json_short_flag(self, mock_vacuum):
+        """The short -j form should behave identically to --json."""
+        import json as _json
+
+        from xiao.cli.app import app
+
+        with patch("xiao.cli.app._vacuum", return_value=mock_vacuum):
+            result = runner.invoke(app, ["status", "-j"])
+        assert result.exit_code == 0
+        _json.loads(result.output)  # must not raise
+
+    def test_consumables_json(self, mock_vacuum):
+        import json as _json
+
+        from xiao.cli.app import app
+
+        with patch("xiao.cli.app._vacuum", return_value=mock_vacuum):
+            result = runner.invoke(app, ["consumables", "--json"])
+        assert result.exit_code == 0
+        parsed = _json.loads(result.output)
+        assert parsed["main_brush_used"] == 50
+        assert parsed["filter_remaining"] == "93%"
+
+    def test_consumables_json_empty(self, mock_vacuum):
+        """When the device returns no consumable data, --json must still
+        emit valid JSON (an empty object) rather than crash."""
+        import json as _json
+
+        from xiao.cli.app import app
+
+        mock_vacuum.consumable_status.return_value = None
+        with patch("xiao.cli.app._vacuum", return_value=mock_vacuum):
+            result = runner.invoke(app, ["consumables", "--json"])
+        assert result.exit_code == 0
+        assert _json.loads(result.output) == {}
+
+
+class TestExitCodes:
+    """Verify the canonical exit-code contract documented in AGENTS.md."""
+
+    def test_not_configured_exits_2(self):
+        """Cloud mode enabled with no username/did → EXIT_NOT_CONFIGURED=2."""
+        from xiao.cli.app import app
+
+        with (
+            patch("xiao.cli.app.is_cloud_mode", return_value=True),
+            patch("xiao.cli.app.get_cloud_config", return_value={}),
+        ):
+            result = runner.invoke(app, ["status"])
+        assert result.exit_code == 2
+
+    def test_exit_code_constants_match_docs(self):
+        """AGENTS.md pins exit codes 0/1/2/77/78/79/80 — make sure the
+        module still defines those exact integers."""
+        from xiao.core import exit_codes
+
+        assert exit_codes.EXIT_OK == 0
+        assert exit_codes.EXIT_GENERIC == 1
+        assert exit_codes.EXIT_NOT_CONFIGURED == 2
+        assert exit_codes.EXIT_TOKEN_EXPIRED == 77
+        assert exit_codes.EXIT_CDP_UNREACHABLE == 78
+        assert exit_codes.EXIT_STATE_21 == 79
+        assert exit_codes.EXIT_VACUUM_UNRESPONSIVE == 80
+
+
 class TestCLISettings:
     def test_speed_get(self, mock_vacuum):
         from xiao.cli.app import app

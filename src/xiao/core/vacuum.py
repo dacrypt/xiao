@@ -13,7 +13,7 @@ class VacuumService:
         self._ip = ip
         self._token = token
         self._model = model
-        self._device = None
+        self._device: Any = None
 
     def _get_device(self):
         if self._device is not None:

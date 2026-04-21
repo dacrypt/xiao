@@ -13,7 +13,7 @@ import logging
 import re
 import subprocess
 import time
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from micloud.miutils import (
     decrypt_rc4,
@@ -21,6 +21,9 @@ from micloud.miutils import (
     generate_enc_params,
     signed_nonce,
 )
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
 
 logger = logging.getLogger(__name__)
 
@@ -119,7 +122,7 @@ def _read_verification_code(max_wait: int = 120, poll_interval: int = 8, after_t
 def _playwright_login(
     username: str,
     password: str,
-    on_status: callable | None = None,
+    on_status: Callable[[str], Any] | None = None,
 ) -> dict[str, str]:
     """Complete Xiaomi login via Playwright, handling Terms dialog & email 2FA.
 
@@ -356,7 +359,7 @@ def _has_verification(page) -> bool:
         return False
 
 
-def _handle_captcha(page, status: callable) -> None:
+def _handle_captcha(page, status: Callable[[str], Any]) -> None:
     """Attempt to handle image captcha. Uses OCR or skips if not solvable."""
     # Take screenshot of captcha area
     try:
@@ -408,7 +411,7 @@ def _handle_captcha(page, status: callable) -> None:
     status("Could not auto-solve captcha. Will try alternative login method.")
 
 
-def _handle_email_verification(page, status: callable) -> bool:
+def _handle_email_verification(page, status: Callable[[str], Any]) -> bool:
     """Handle email verification flow in the browser."""
     # Click send/verify button
     status("Looking for 'Send code' button...")
@@ -513,7 +516,7 @@ def _make_session() -> req_lib.Session:
 class XiaomiCloud:
     """Xiaomi Cloud client with captcha + email verification support."""
 
-    def __init__(self, username: str, password: str, on_status: callable | None = None):
+    def __init__(self, username: str, password: str, on_status: Callable[[str], Any] | None = None):
         self.username = username
         self.password = password
         self.on_status = on_status
@@ -709,8 +712,8 @@ class XiaomiCloud:
             timeout=30,
             cookies={
                 "userId": str(self.user_id),
-                "yetAnotherServiceToken": self.service_token,
-                "serviceToken": self.service_token,
+                "yetAnotherServiceToken": self.service_token or "",
+                "serviceToken": self.service_token or "",
                 "locale": "en_US",
                 "timezone": "GMT+00:00",
                 "is_daylight": "0",
@@ -734,7 +737,7 @@ class XiaomiCloud:
             timeout=30,
             cookies={
                 "userId": str(self.user_id),
-                "serviceToken": self.service_token,
+                "serviceToken": self.service_token or "",
             },
         )
         if resp.status_code == 200:
@@ -759,7 +762,7 @@ def get_cloud_devices(
     username: str,
     password: str,
     server: str = "sg",
-    on_status: callable | None = None,
+    on_status: Callable[[str], Any] | None = None,
 ) -> list[dict[str, Any]]:
     """Fetch all devices from Xiaomi cloud account.
 

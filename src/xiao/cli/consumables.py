@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import json
+import sys
+
 import typer
 from rich import print as rprint
 
@@ -17,12 +20,19 @@ def _vacuum():
 
 
 @app.callback(invoke_without_command=True)
-def consumables(ctx: typer.Context):
+def consumables(
+    ctx: typer.Context,
+    as_json: bool = typer.Option(False, "--json", "-j", help="Output raw JSON instead of a Rich table"),
+):
     """Show consumable status (main brush, side brush, filter, mop)."""
     if ctx.invoked_subcommand is not None:
         return
     vac = _vacuum()
     data = vac.consumable_status()
+    if as_json:
+        sys.stdout.write(json.dumps(data or {}, indent=2, default=str))
+        sys.stdout.write("\n")
+        return
     if data:
         render_consumables(data)
     else:
@@ -31,9 +41,7 @@ def consumables(ctx: typer.Context):
 
 @app.command()
 def reset(
-    component: str = typer.Argument(
-        help="Consumable to reset: main_brush, side_brush, filter, mop, or 'all'"
-    ),
+    component: str = typer.Argument(help="Consumable to reset: main_brush, side_brush, filter, mop, or 'all'"),
 ):
     """Reset a consumable counter after replacing the physical part."""
     vac = _vacuum()

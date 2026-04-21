@@ -1,9 +1,11 @@
-"""Token refresh via OpenClaw browser CDP.
+"""Token refresh via a persistent Chromium browser over CDP.
 
-Uses the existing Xiaomi session in the OpenClaw browser to obtain
-fresh ssecurity + serviceToken WITHOUT email verification.
+Reuses an existing logged-in Xiaomi session in a Chromium-based browser
+(launched with --remote-debugging-port=18800) to obtain fresh ssecurity +
+serviceToken WITHOUT email verification or captcha.
 
-Requires: OpenClaw browser running on port 18800 with an active Xiaomi session.
+Requires: a Chromium/Chrome instance listening on port 18800 with an
+active Xiaomi account session (httpOnly cookies).
 """
 
 from __future__ import annotations
@@ -19,7 +21,7 @@ CDP_PORT = 18800
 
 
 def refresh_tokens(username: str, password: str) -> dict[str, str] | None:
-    """Refresh Xiaomi Cloud tokens using the OpenClaw browser session.
+    """Refresh Xiaomi Cloud tokens using the persistent Chromium session.
 
     Returns dict with userId, serviceToken, ssecurity on success, None on failure.
     """

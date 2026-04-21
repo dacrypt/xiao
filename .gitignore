@@ -35,3 +35,9 @@ Thumbs.db
 # Project
 config.toml
 tank_state.json
+
+# Claude Code / OMC session state
+# (ignore everything under .claude/ except distributable skills)
+.claude/*
+!.claude/skills/
+.omc/

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import sys
 
 import typer
 from rich import print as rprint
@@ -18,6 +19,7 @@ from xiao.core.config import (
     is_cloud_mode,
     save_cloud_session,
 )
+from xiao.core.exit_codes import EXIT_NOT_CONFIGURED, EXIT_TOKEN_EXPIRED
 from xiao.core.vacuum import get_vacuum
 from xiao.ui.formatters import render_full_status, render_report, render_status
 
@@ -56,7 +58,7 @@ def _cloud_vacuum():
 
     if not username or not did:
         rprint("[red]Cloud mode enabled but not configured. Run [bold]xiao setup cloud[/bold].[/red]")
-        raise SystemExit(1)
+        raise SystemExit(EXIT_NOT_CONFIGURED)
 
     def _build_cloud_from_session(sd):
         c = XiaomiCloud.__new__(XiaomiCloud)
@@ -80,7 +82,7 @@ def _cloud_vacuum():
         # Try browser-based token refresh first (no email verification needed)
         from xiao.core.token_refresh import refresh_tokens
 
-        rprint("[yellow]No saved session. Refreshing via OpenClaw browser...[/yellow]")
+        rprint("[yellow]No saved session. Refreshing via Chromium CDP session...[/yellow]")
         tokens = refresh_tokens(username, password)
         if tokens:
             save_cloud_session(tokens["userId"], tokens["serviceToken"], tokens["ssecurity"])
@@ -98,7 +100,7 @@ def _cloud_vacuum():
             cloud = XiaomiCloud(username, password, on_status=lambda m: rprint(f"  [dim]{m}[/dim]"))
             if not cloud.login():
                 rprint("[red]Cloud login failed.[/red]")
-                raise SystemExit(1)
+                raise SystemExit(EXIT_TOKEN_EXPIRED)
             save_cloud_session(cloud.user_id, cloud.service_token, cloud.ssecurity)
             rprint("[green]Logged in and session saved.[/green]")
 
@@ -172,19 +174,29 @@ def dock():
 @app.command()
 def status(
     full: bool = typer.Option(False, "--full", "-f", help="Show comprehensive status with all details"),
+    as_json: bool = typer.Option(False, "--json", "-j", help="Output raw JSON instead of a Rich panel"),
 ):
     """Show current vacuum status."""
     vac = _vacuum()
     if full:
         try:
             data = vac.full_status()
-            render_full_status(data)
         except AttributeError:
-            # Fallback for non-cloud vacuum
             data = vac.status()
-            render_status(data)
     else:
         data = vac.status()
+
+    if as_json:
+        sys.stdout.write(json.dumps(data, indent=2, default=str))
+        sys.stdout.write("\n")
+        return
+
+    if full:
+        try:
+            render_full_status(data)
+        except Exception:
+            render_status(data)
+    else:
         render_status(data)
 
 
