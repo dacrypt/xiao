@@ -478,6 +478,12 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for source-tree layout, MIoT spec notes, 
 
 ---
 
+## Privacy
+
+`xiao` collects **nothing**. No telemetry, no analytics, no backend. Your
+Xiaomi credentials and session tokens live exclusively on your machine.
+See [PRIVACY.md](PRIVACY.md) for the full statement.
+
 ## License
 
 [MIT](LICENSE)
