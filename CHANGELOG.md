@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.0](https://github.com/dacrypt/xiao/compare/v0.3.0...v0.4.0) (2026-04-21)
+
+
+### Added
+
+* **cli:** ergonomics — default command, XIAO_DEBUG, doctor, completion docs ([ccd7b47](https://github.com/dacrypt/xiao/commit/ccd7b47b893f783e721483da2910e9d8cae4e49c))
+* **docker:** publish OCI image to GHCR on every release ([f149a5f](https://github.com/dacrypt/xiao/commit/f149a5fdceb20813129bb89b8ef7e5ae4436140d))
+
 ## [0.3.0](https://github.com/dacrypt/xiao/compare/v0.2.1...v0.3.0) (2026-04-21)
 
 
