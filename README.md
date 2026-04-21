@@ -65,18 +65,23 @@ playwright install chromium
 
 ## Prerequisites
 
-Before any `xiao` command will work, all of these must be true:
+Before any `xiao` command will work:
 
 1. `xiao` installed (see above) + `playwright install chromium` run once.
 2. `xiao setup cloud` completed — writes `config.toml` at:
    - macOS: `~/Library/Application Support/xiao/config.toml`
    - Linux: `~/.config/xiao/config.toml`
-3. *(For automatic token refresh)* A Chromium process listening on `127.0.0.1:18800` with an active Xiaomi account session:
-   ```bash
-   chromium --remote-debugging-port=18800 --user-data-dir=~/.xiao-chromium
-   # then log in manually at https://account.xiaomi.com once, leave it running
-   ```
-   If missing, `xiao` falls back to `xiao cloud-login`, which requires solving captcha + email 2FA once per expiry.
+
+That's it. `xiao setup cloud` will also offer to run `xiao setup
+browser-login` at the end: a one-time Chromium window where you log into
+`account.xiaomi.com`. The session cookies are saved to a private profile
+under your config dir, so every future token refresh runs headless — no
+captcha, no email 2FA.
+
+You can rerun `xiao setup browser-login` anytime if a token expires or
+the profile is cleared. Power users who already maintain a Chromium
+session exposed over CDP can skip the profile entirely by setting
+`XIAO_CDP_PORT=18800` (or whatever port).
 
 ---
 

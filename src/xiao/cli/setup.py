@@ -306,6 +306,13 @@ def cloud():
             except Exception as e:
                 rprint(f"[red]Test failed: {e}[/red]")
 
+        rprint("")
+        if Confirm.ask(
+            "Seed the browser session now so future token refreshes are silent (no captcha)?",
+            default=True,
+        ):
+            _run_browser_login()
+
         show_star_banner()
 
     except ImportError as e:
@@ -320,6 +327,45 @@ def _mask_token(token: str) -> str:
     if len(token) > 12:
         return f"{token[:8]}...{token[-4:]}"
     return token or "—"
+
+
+def _run_browser_login() -> None:
+    """Open the Xiaomi login page in a managed Chromium and wait for the
+    user to finish logging in. Seeds the persistent profile so later token
+    refreshes run headless."""
+    from xiao.core.token_refresh import PROFILE_DIR, seed_browser_session
+
+    rprint(
+        Panel(
+            "[bold]A Chromium window will open at account.xiaomi.com.[/bold]\n"
+            "Log in (solve captcha / 2FA if prompted), then close the window.\n"
+            f"Session data is stored privately under [cyan]{PROFILE_DIR}[/cyan].",
+            border_style="cyan",
+        )
+    )
+    try:
+        ok = seed_browser_session()
+    except Exception as e:
+        rprint(f"[red]Browser seeding failed: {e}[/red]")
+        rprint(
+            "[yellow]If you haven't installed Playwright's browser yet, run:[/yellow]\n"
+            "  [bold]playwright install chromium[/bold]"
+        )
+        return
+    if ok:
+        rprint("[green]✓ Browser session saved. Token refresh will be silent from now on.[/green]")
+    else:
+        rprint(
+            "[yellow]Window closed before a logged-in URL was detected. "
+            "You can rerun [bold]xiao setup browser-login[/bold] anytime.[/yellow]"
+        )
+
+
+@app.command("browser-login")
+def browser_login():
+    """Open a Chromium window to log into account.xiaomi.com; seeds the
+    persistent profile so future cloud commands can refresh tokens silently."""
+    _run_browser_login()
 
 
 def _test_connection(ip: str, token: str, model: str, protocol: str) -> None:

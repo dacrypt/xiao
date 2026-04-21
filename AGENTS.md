@@ -16,16 +16,20 @@ on success and non-zero on error.
 4. `xiao setup cloud` has been completed — produces `config.toml` at:
    - macOS: `~/Library/Application Support/xiao/config.toml`
    - Linux: `~/.config/xiao/config.toml`
-5. For automatic token refresh: a Chromium process listening on
-   `127.0.0.1:18800` with an active Xiaomi account session (httpOnly cookies).
-   Launch with:
-   `chromium --remote-debugging-port=18800 --user-data-dir=~/.xiao-chromium`
-   then log into `https://account.xiaomi.com` manually **once** and leave it
-   running.
+5. `xiao setup browser-login` has been run once — opens a Chromium window
+   pointed at `https://account.xiaomi.com` where the human logs in. The
+   session persists in a private profile (`<CONFIG_DIR>/chromium`) so
+   future token refreshes run headless, no captcha or email 2FA. Step 4
+   offers to run this automatically at the end of its flow.
 
-If prerequisite 5 is missing, token refresh falls back to `xiao cloud-login`
-which requires the user to solve a captcha + email 2FA in a Playwright-driven
-window.
+If prerequisite 5 is missing (empty profile / expired session), token
+refresh falls back to `xiao cloud-login` which requires captcha + email
+2FA inside a Playwright-driven window. Instruct the user to rerun
+`xiao setup browser-login` to restore silent refresh.
+
+**Advanced:** if the user already maintains a Chromium over CDP for other
+tooling, set `XIAO_CDP_PORT=<port>` and xiao will prefer that session
+instead of the managed profile.
 
 ## Canonical commands
 
