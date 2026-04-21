@@ -1,0 +1,23 @@
+{
+  "name": "xiao",
+  "description": "Control a Xiaomi Robot Vacuum X20+ via the xiao CLI. Agent-ready: AGENTS.md, llms.txt, SKILL.md, --json output, canonical exit codes.",
+  "version": "0.1.2",
+  "author": {
+    "name": "David Dacrypt",
+    "url": "https://github.com/dacrypt"
+  },
+  "homepage": "https://github.com/dacrypt/xiao",
+  "repository": "https://github.com/dacrypt/xiao",
+  "license": "MIT",
+  "keywords": [
+    "xiaomi",
+    "roborock",
+    "vacuum",
+    "robot-vacuum",
+    "home-automation",
+    "smart-home",
+    "iot",
+    "agent-tool",
+    "cli"
+  ]
+}
