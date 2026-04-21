@@ -1,6 +1,6 @@
 [project]
 name = "xiao"
-version = "0.1.2"
+version = "0.2.0"
 description = "CLI tool and web dashboard to control Xiaomi/Roborock robot vacuums via cloud API"
 readme = "README.md"
 license = { file = "LICENSE" }

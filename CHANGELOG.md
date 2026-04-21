@@ -5,6 +5,22 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.0](https://github.com/dacrypt/xiao/compare/v0.1.2...v0.2.0) (2026-04-21)
+
+
+### Added
+
+* **cli:** add GitHub star CTA across three surfaces ([907778b](https://github.com/dacrypt/xiao/commit/907778bfc4c4c400505e78b5e366d7db48e06998))
+* **plugin:** make xiao a valid Claude Code plugin for marketplace submission ([#7](https://github.com/dacrypt/xiao/issues/7)) ([d64e904](https://github.com/dacrypt/xiao/commit/d64e9044072a33abb5f588b80af240af3901c40a))
+
+
+### Documentation
+
+* add PRIVACY.md — no data collection, OSS, all local ([#8](https://github.com/dacrypt/xiao/issues/8)) ([4f3b08a](https://github.com/dacrypt/xiao/commit/4f3b08a78b24e5a23416251fd91dd084a2273610))
+* **publishing:** agent-registry distribution plan + paste-ready submission drafts ([#3](https://github.com/dacrypt/xiao/issues/3)) ([23816a5](https://github.com/dacrypt/xiao/commit/23816a5011e59906a5586f304b123cc6ebddd872))
+* **publishing:** execute Tier-1 agent-registry submissions ([#5](https://github.com/dacrypt/xiao/issues/5)) ([79931d3](https://github.com/dacrypt/xiao/commit/79931d34e879ac79139a6bc9fddadfd463e1a41a))
+* **publishing:** mark skills.sh published — @dacrypt/xiao-skill@0.1.0 ([#6](https://github.com/dacrypt/xiao/issues/6)) ([5f857e4](https://github.com/dacrypt/xiao/commit/5f857e4784af1453e57bebf5fa0acbf086d71046))
+
 ## [0.1.2] - 2026-04-21
 
 ### Changed
