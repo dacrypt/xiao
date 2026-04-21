@@ -1,8 +1,8 @@
 # Anthropic `claude-plugins-official` directory
 
 **URL:** https://github.com/anthropics/claude-plugins-official
-**Submission form:** https://clau.de/plugin-directory-submission
-**Mechanism:** Web form; manually reviewed by Anthropic for quality and security.
+**Submission flow:** in-app via Claude — try `claude.ai/settings/plugins/submit` or `platform.claude.com/plugins/submit`. The short URL `clau.de/plugin-directory-submission` redirects to the current docs (`code.claude.com/docs/en/plugins#submit-your-plugin-to-the-official-marketplace`) — **check docs first** as the submission path may have moved since this draft was written (2026-04-21).
+**Mechanism:** In-app submission form; manually reviewed by Anthropic for quality and security.
 **Approval:** Curated, 1–2 week review.
 **Why it matters:** Highest-prestige Claude-specific listing; appears in Claude Code's built-in marketplace UI.
 

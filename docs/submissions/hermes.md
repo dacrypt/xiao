@@ -60,7 +60,6 @@ respond to issues in https://github.com/dacrypt/xiao/issues.
 
 ## Why this venue
 
-The user named this one explicitly. Hermes is a curated skills hub with a
-technically sophisticated audience (Nous Research community). The
-agentskills.io compliance is already done, so this is a quick, high-signal
-listing.
+Hermes is a curated skills hub with a technically sophisticated audience
+(Nous Research community). Low friction to submit because the
+agentskills.io compliance is already done via our existing `SKILL.md`.
