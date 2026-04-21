@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.0](https://github.com/dacrypt/xiao/compare/v0.2.1...v0.3.0) (2026-04-21)
+
+
+### Added
+
+* **auth:** self-manage Chromium profile for silent token refresh ([bf59014](https://github.com/dacrypt/xiao/commit/bf590143a7b154615ddd3ad21867d1115a13de68))
+
 ## [0.2.1](https://github.com/dacrypt/xiao/compare/v0.2.0...v0.2.1) (2026-04-21)
 
 
