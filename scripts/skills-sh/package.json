@@ -1,0 +1,35 @@
+{
+  "name": "@dacrypt/xiao-skill",
+  "version": "0.1.0",
+  "description": "Control a Xiaomi Robot Vacuum X20+ via the xiao CLI — agent-ready skill for Claude Code, Codex CLI, Cursor, Gemini CLI, Copilot (agentskills.io format).",
+  "keywords": [
+    "agent-skill",
+    "agentskills.io",
+    "claude-skill",
+    "xiaomi",
+    "roborock",
+    "vacuum",
+    "robot-vacuum",
+    "home-automation",
+    "cli",
+    "mcp"
+  ],
+  "license": "MIT",
+  "homepage": "https://github.com/dacrypt/xiao",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/dacrypt/xiao.git"
+  },
+  "bugs": {
+    "url": "https://github.com/dacrypt/xiao/issues"
+  },
+  "author": "David Dacrypt",
+  "files": [
+    "SKILL.md",
+    "AGENTS.md",
+    "README.md"
+  ],
+  "agentskills": {
+    "skills": ["SKILL.md"]
+  }
+}
