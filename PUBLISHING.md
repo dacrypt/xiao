@@ -12,6 +12,62 @@ All per-venue submission copy lives under
 URLs, and checklist for one venue. Shared artefacts (pitch, description,
 tags) live in [`docs/submissions/_shared.md`](docs/submissions/_shared.md).
 
+## Automated release flow
+
+`xiao` uses **[release-please](https://github.com/googleapis/release-please)**
++ **PyPI OIDC trusted publishing** so releases, changelogs, and PyPI uploads
+happen with zero manual steps.
+
+### How it works
+
+1. You merge commits to `main` using [Conventional Commits](https://www.conventionalcommits.org/)
+   (`feat:`, `fix:`, `docs:`, `refactor:`, `perf:` …).
+2. [`.github/workflows/release-please.yml`](.github/workflows/release-please.yml)
+   runs on every push and keeps an open **release PR** that accumulates the
+   pending changelog and the next version bump in `pyproject.toml`.
+3. When you merge that release PR:
+   - It creates a `vX.Y.Z` tag.
+   - It creates a GitHub Release with release notes.
+   - [`.github/workflows/publish.yml`](.github/workflows/publish.yml) fires on
+     `release: published`, runs `uv build`, and uploads to PyPI via OIDC
+     (no API token stored in the repo).
+
+### Bump rules
+
+| Commit type            | Bump        |
+|------------------------|-------------|
+| `feat:`                | minor       |
+| `fix:`, `perf:`, `refactor:`, `revert:` | patch       |
+| Footer `BREAKING CHANGE:` or `feat!:` | major       |
+| `docs:`, `chore:`, `ci:`, `test:`, `style:` | no release  |
+
+Version state lives in [`.release-please-manifest.json`](.release-please-manifest.json);
+changelog sections are configured in [`release-please-config.json`](release-please-config.json).
+
+### One-time PyPI setup (already required for first automated release)
+
+On [pypi.org/manage/project/xiao/settings/publishing/](https://pypi.org/manage/project/xiao/settings/publishing/),
+add a **Trusted Publisher** with:
+
+- Owner: `dacrypt`
+- Repository name: `xiao`
+- Workflow name: `publish.yml`
+- Environment name: `pypi`
+
+Also create a GitHub environment named `pypi` (Settings → Environments) with no
+required reviewers — the workflow references it for the OIDC claim.
+
+### Manual release (fallback)
+
+If release-please is unavailable, bump `version` in `pyproject.toml`, update
+`CHANGELOG.md`, tag, and publish manually:
+
+```bash
+uv build
+uv publish    # requires PYPI_TOKEN env var (not used by CI)
+```
+
+
 ## Tier 1 — status
 
 | Venue | URL | Submission | Status | Draft |
