@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.1](https://github.com/dacrypt/xiao/compare/v0.2.0...v0.2.1) (2026-04-21)
+
+
+### Documentation
+
+* add 10s terminal demo GIF via vhs ([fa5034d](https://github.com/dacrypt/xiao/commit/fa5034dc8c5b984a7c5f8802a0c2d265e702bda8))
+* document Conventional Commits for release-please automation ([5c5a271](https://github.com/dacrypt/xiao/commit/5c5a271c7a15177286ccf20035b7ab1923f3285f))
+
 ## [0.2.0](https://github.com/dacrypt/xiao/compare/v0.1.2...v0.2.0) (2026-04-21)
 
 
