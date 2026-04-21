@@ -6,7 +6,11 @@ readme = "README.md"
 license = { file = "LICENSE" }
 requires-python = ">=3.12"
 authors = [{ name = "David Dacrypt" }]
-keywords = ["xiaomi", "roborock", "vacuum", "miot", "cli", "dashboard", "smart-home", "iot"]
+keywords = [
+    "xiaomi", "roborock", "vacuum", "robot-vacuum", "miot",
+    "cli", "dashboard", "smart-home", "home-automation", "iot",
+    "agent-tool", "llm-tool", "mcp", "claude-skill", "agents-md",
+]
 classifiers = [
     "Development Status :: 4 - Beta",
     "Environment :: Console",
