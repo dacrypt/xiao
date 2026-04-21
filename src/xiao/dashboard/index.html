@@ -305,6 +305,44 @@ header {
   font-weight: 700;
   letter-spacing: 0.5px;
 }
+.collapsible-card {
+  padding: 0;
+}
+.collapsible-summary {
+  list-style: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 20px;
+  font-size: 0.65rem;
+  text-transform: uppercase;
+  letter-spacing: 2.5px;
+  color: var(--accent);
+  font-weight: 700;
+  user-select: none;
+}
+.collapsible-summary::-webkit-details-marker {
+  display: none;
+}
+.collapsible-summary::before {
+  content: '▸';
+  color: var(--text-dim);
+  font-size: 0.9rem;
+  transition: transform 0.2s ease;
+}
+.collapsible-card[open] .collapsible-summary::before {
+  transform: rotate(90deg);
+}
+.collapsible-summary .badge {
+  margin-left: auto;
+}
+.collapsible-body {
+  padding: 0 20px 20px;
+}
+.collapsible-card:not([open]) .collapsible-summary {
+  margin-bottom: 0;
+}
 .span2 { grid-column: span 2; }
 .span3 { grid-column: span 3; }
 .span4 { grid-column: 1 / -1; }
@@ -1603,22 +1641,28 @@ input[type=range]::-webkit-slider-thumb:hover {
   </div>
 
   <!-- ═══ ROW 8: Audio & Voice ═══ -->
-  <div class="card glass span2">
-    <div class="card-title">🔊 AUDIO & VOICE</div>
-    <div id="audioArea"><div class="skeleton"></div></div>
-  </div>
+  <details class="card glass span2 collapsible-card" data-collapsible-section="audio">
+    <summary class="collapsible-summary">🔊 AUDIO & VOICE</summary>
+    <div class="collapsible-body">
+      <div id="audioArea"><div class="skeleton"></div></div>
+    </div>
+  </details>
 
   <!-- ═══ ROW 8b: Clean Log (Extended) ═══ -->
-  <div class="card glass span2">
-    <div class="card-title">📋 CLEAN LOG (RAW) <span class="badge">siid 4</span></div>
-    <div id="cleanLogArea"><div class="skeleton"></div></div>
-  </div>
+  <details class="card glass span2 collapsible-card" data-collapsible-section="clean-log">
+    <summary class="collapsible-summary">📋 CLEAN LOG (RAW) <span class="badge">siid 4</span></summary>
+    <div class="collapsible-body">
+      <div id="cleanLogArea"><div class="skeleton"></div></div>
+    </div>
+  </details>
 
   <!-- ═══ ROW 9: All Properties (Debug) ═══ -->
-  <div class="card glass span4">
-    <div class="card-title">🔬 ALL PROPERTIES <span class="badge" id="propCountBadge">--</span></div>
-    <div id="allPropsArea"><div class="skeleton" style="margin-bottom:8px"></div><div class="skeleton" style="width:60%"></div></div>
-  </div>
+  <details class="card glass span4 collapsible-card" data-collapsible-section="all-properties">
+    <summary class="collapsible-summary">🔬 ALL PROPERTIES <span class="badge" id="propCountBadge">--</span></summary>
+    <div class="collapsible-body">
+      <div id="allPropsArea"><div class="skeleton" style="margin-bottom:8px"></div><div class="skeleton" style="width:60%"></div></div>
+    </div>
+  </details>
 </div>
 
 <!-- Floating Quick Actions (mobile) -->
