@@ -326,10 +326,10 @@ def render_consumables(data: dict[str, Any]) -> None:
     # siid 11 (filter): piid1=life_level(%), piid2=left_time(h)
     # siid 18 (mop): piid1=life_level(%), piid2=left_time(h)
     components = [
-        ("Main Brush", "main_brush_life", "main_brush_used"),     # life=%, used=hours_left
-        ("Side Brush", "side_brush_life", "side_brush_used"),     # life=%, used=hours_left
-        ("Filter", "filter_used", "filter_life"),                  # used=life_level%, life=hours_left
-        ("Mop Pad", "mop_life_level", "mop_left_time"),           # life_level=%, left_time=hours
+        ("Main Brush", "main_brush_life", "main_brush_used"),  # life=%, used=hours_left
+        ("Side Brush", "side_brush_life", "side_brush_used"),  # life=%, used=hours_left
+        ("Filter", "filter_used", "filter_life"),  # used=life_level%, life=hours_left
+        ("Mop Pad", "mop_life_level", "mop_left_time"),  # life_level=%, left_time=hours
     ]
 
     for label, pct_key, hours_key in components:

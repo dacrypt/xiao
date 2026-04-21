@@ -22,10 +22,10 @@ def rooms(ctx: typer.Context):
     room_aliases = get_rooms()
 
     # Known room IDs from schedules (discovered from device)
-    known_ids = {1, 2, 3, 4, 6, 7, 8, 10, 12}
+    known_ids: set[int] = {1, 2, 3, 4, 6, 7, 8, 10, 12}
     # Merge with any aliases that might have other IDs
-    for rid in room_aliases:
-        known_ids.add(int(rid))
+    for alias_id in room_aliases:
+        known_ids.add(int(alias_id))
 
     table = Table(title="Rooms", border_style="cyan")
     table.add_column("ID", style="bold", justify="right")
