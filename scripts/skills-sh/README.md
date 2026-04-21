@@ -20,9 +20,9 @@ From the repo root:
 
 ```bash
 # 1. Copy the current SKILL.md + AGENTS.md into this directory
+#    (README.md is already in place; no action needed for it)
 cp .claude/skills/xiao/SKILL.md scripts/skills-sh/SKILL.md
 cp AGENTS.md                     scripts/skills-sh/AGENTS.md
-cp scripts/skills-sh/README.md   scripts/skills-sh/README.md  # no-op, already there
 
 # 2. (Optional) validate the SKILL.md against agentskills.io spec
 npx skills-ref validate scripts/skills-sh
