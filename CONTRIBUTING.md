@@ -44,8 +44,45 @@ uv run mypy src/xiao/
 2. Create a feature branch (`git checkout -b feature/my-feature`)
 3. Make your changes
 4. Run tests and linting
-5. Commit with a clear message
+5. Commit using [Conventional Commits](https://www.conventionalcommits.org/) (see below)
 6. Push and open a Pull Request
+
+## Commit messages — Conventional Commits
+
+Releases and the changelog are automated via
+[release-please](https://github.com/googleapis/release-please). The next
+version is computed from the commit prefixes since the last tag, so the
+prefix you pick directly shapes the release. Use one of:
+
+| Prefix       | When                                           | Release effect  |
+|--------------|------------------------------------------------|-----------------|
+| `feat:`      | User-visible new capability                    | Minor bump      |
+| `fix:`       | User-visible bug fix                           | Patch bump      |
+| `perf:`      | Performance improvement                        | Patch bump      |
+| `refactor:`  | Internal restructuring, no behavior change     | Patch bump      |
+| `docs:`      | Documentation only                             | Patch bump      |
+| `chore:`     | Tooling / maintenance not worth a release note | No release      |
+| `ci:`        | CI/CD config                                    | No release      |
+| `test:`      | Tests only                                      | No release      |
+| `style:`     | Formatting only                                 | No release      |
+
+Breaking changes: add `!` after the type (`feat!: drop Python 3.11`) or a
+`BREAKING CHANGE:` footer. Either triggers a major bump.
+
+Optional scope in parentheses after the type — e.g. `feat(cli): add
+--json flag`, `fix(cloud): retry on 429`. Scopes show up in the changelog.
+
+Examples:
+
+```
+feat(cli): add `xiao zones` command
+fix(cloud): handle empty consumable response
+docs: clarify Chromium CDP setup in README
+chore: bump dev dependencies
+feat!: drop Python 3.11 support
+
+BREAKING CHANGE: minimum supported Python is now 3.12.
+```
 
 ## Pull Request Guidelines
 
@@ -53,6 +90,8 @@ uv run mypy src/xiao/
 - Include tests for new functionality
 - Update documentation if needed
 - Follow existing code style (enforced by ruff)
+- The PR title should also follow Conventional Commits — squash merges use
+  the PR title as the commit message, which release-please then parses
 
 ## MIoT Spec
 
