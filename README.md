@@ -1,6 +1,7 @@
 # xiao — Xiaomi Vacuum CLI & Mission Control
 
 [![CI](https://github.com/dacrypt/xiao/actions/workflows/ci.yml/badge.svg)](https://github.com/dacrypt/xiao/actions/workflows/ci.yml)
+[![PyPI](https://img.shields.io/pypi/v/xiao-cli)](https://pypi.org/project/xiao-cli/)
 [![Python 3.12+](https://img.shields.io/badge/python-3.12%2B-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 [![Agent-ready](https://img.shields.io/badge/agent--ready-AGENTS.md%20%7C%20llms.txt-blueviolet)](AGENTS.md)
