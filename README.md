@@ -59,6 +59,19 @@ Then install Playwright's Chromium (needed for the cloud-login fallback):
 playwright install chromium
 ```
 
+### Docker
+
+A lightweight image is published to GHCR on every release. It's meant for
+running vacuum commands against an existing config — run `xiao setup
+cloud` once on your workstation, then mount the resulting config dir:
+
+```bash
+docker run --rm -v "$HOME/.config/xiao:/root/.config/xiao" \
+  ghcr.io/dacrypt/xiao status
+```
+
+(On macOS the host path is `~/Library/Application Support/xiao`.)
+
 **Compatibility:** Python 3.12+. Tested against vacuum model `xiaomi.vacuum.c102gl` on Xiaomi Cloud API as of 2024. Token refresh tested with Chromium ≥ 120 (currently running 147).
 
 ### Shell completions (optional)

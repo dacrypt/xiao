@@ -18,12 +18,11 @@ jobs:
         with:
           config-file: release-please-config.json
           manifest-file: .release-please-manifest.json
-      - name: Dispatch publish workflow on release
+      - name: Dispatch downstream workflows on release
         if: ${{ steps.release.outputs.release_created == 'true' }}
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ steps.release.outputs.tag_name }}
         run: |
-          gh workflow run publish.yml \
-            --repo "$GITHUB_REPOSITORY" \
-            --ref main \
-            -f tag="${{ steps.release.outputs.tag_name }}"
+          gh workflow run publish.yml --repo "$GITHUB_REPOSITORY" --ref main -f tag="$TAG"
+          gh workflow run docker.yml  --repo "$GITHUB_REPOSITORY" --ref main -f tag="$TAG"
