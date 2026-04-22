@@ -14,7 +14,6 @@
 
 ## Improvements Planned
 - 🔵 Dashboard: add dark/light theme toggle
-- 🔵 CLI: `xiao schedule` — view schedules in a nice table
 - 🔵 Sweep type decoding — raw values (448, 467, 472) — NOTE: per official MIoT spec, siid 2 piid 5 is `dry-left-time` (minutes), NOT sweep type. The 448/467/472 values may have been fault codes from piid 2.
 
 ## Research / Exploration
@@ -88,8 +87,9 @@ Sources: Valetudo, python-miio, hass-xiaomi-miot, r/Xiaomi, r/homeassistant
 - OTA firmware management
 
 ## Completed
+- ✅ CLI schedule default view + compact cadence labels — `xiao schedule` now shows the parsed schedule table directly without requiring the extra `list` subcommand, and schedule cadence text now compacts common masks to `Every day`, `Weekdays`, `Weekends`, and `One time` for faster scanning. Added TDD regression coverage for both the parser labels and the root CLI behavior. Research notes: local README/docs already positioned schedule viewing as a primary CLI workflow, and Home Assistant's schedule model explicitly treats weekdays as first-class recurrence data rather than a raw bitmask, which reinforced shipping human-readable cadence labels instead of the previous verbose day list. (2026-04-22)
+- 🔜 Next planned item: Dashboard dark/light theme toggle — keep the current glassmorphism default, but add an explicit theme switch so bright daytime use is less fatiguing on laptops/tablets. (Planned 2026-04-22)
 - ✅ Dashboard diagnostics cleanup — collapsed the lower-noise Audio, Clean Log (Raw), and All Properties panels by default using native `<details>/<summary>` sections, while keeping the same content and live refresh hooks once expanded. Added a regression test that failed before the markup change and now locks the collapsed-by-default contract. (2026-04-21)
-- 🔜 Next planned item: CLI `xiao schedule` — view schedules in a nice table, reusing the existing parser but making recurring jobs easier to scan from the terminal. (Planned 2026-04-21)
 - ✅ CLI rooms rename command — added `xiao rooms rename <id> <name>` as a first-class command (same underlying behavior as alias set) so room naming flows are more discoverable. Added TDD regression test (`TestCLIRooms::test_rooms_rename`) that failed before command implementation and passes now. (2026-04-10)
 - ✅ Device list token auto-refresh — `XiaomiCloud.get_devices()` now catches `TokenExpiredError`, refreshes cloud tokens via browser CDP helper, and retries once before surfacing the error. This closes the remaining gap where setup/device listing could still fail on expired Xiaomi cloud sessions even though RPC/property helpers already retried. Added regression tests for both refresh-success and refresh-failure paths. (2026-04-09)
 - ✅ Room cleaning reliability improvement — `clean_rooms_miot()` now preloads `vacuum-extend` `clean-extend-data` (`siid 4 piid 10`) using a `selects` payload derived from room order, repeat count, current fan mode, and current water mode, then calls the official `siid 2 aiid 3` room-sweep action. CLI `xiao clean --room ... --repeat N` now forwards `repeat` into that MIoT path instead of silently dropping it. Added regression tests. Hardware verification still pending. (2026-04-08)

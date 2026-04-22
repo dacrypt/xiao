@@ -212,7 +212,8 @@ Every command. One row each. Full catalog also lives in [AGENTS.md](AGENTS.md).
 | `xiao map show` | Show raw map metadata from the cloud | — |
 | `xiao rooms alias <id> "<name>"` | Add friendly-name alias | — |
 | `xiao rooms rename <id\|alias> "<new>"` | Rename an alias | — |
-| `xiao schedule list` | Show parsed schedules | — |
+| `xiao schedule` | Show parsed schedules in a compact table | `--json` for machine-readable output |
+| `xiao schedule list` | Alias for `xiao schedule` | `--json` |
 | `xiao consumables [--json]` | Brush / filter / mop health | `--json` for machine-readable output |
 | `xiao consumables reset <part>` | Reset counter (`main_brush` \| `side_brush` \| `filter` \| `mop` \| `all`) | — |
 | `xiao report` | Full combined report | — |

@@ -217,6 +217,31 @@ class TestCLISchedule:
             result = runner.invoke(app, ["schedule", "list"])
         assert result.exit_code == 0
 
+    def test_schedule_root_defaults_to_list(self, mock_vacuum):
+        from xiao.cli.app import app
+
+        mock_vacuum.schedules_parsed.return_value = [
+            {
+                "id": "2",
+                "enabled": True,
+                "time": "09:15",
+                "days_display": "Weekdays",
+                "repeat": True,
+                "mode": "Sweep & Mop",
+                "fan": "Medium",
+                "water": "Medium",
+                "rooms_display": ["Kitchen (3)"],
+            }
+        ]
+
+        with patch("xiao.cli.app._vacuum", return_value=mock_vacuum):
+            result = runner.invoke(app, ["schedule"])
+
+        assert result.exit_code == 0
+        assert "Cleaning Schedules" in result.stdout
+        assert "Weekdays" in result.stdout
+        assert "Kitchen (3)" in result.stdout
+
 
 class TestCLIRooms:
     def test_rooms_rename(self):

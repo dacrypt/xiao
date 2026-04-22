@@ -169,6 +169,29 @@ class TestCloudVacuumHistory:
         assert "last_clean_date" not in data
 
 
+class TestCloudVacuumSchedules:
+    def test_schedules_parsed_compacts_common_day_patterns(self, vacuum):
+        with (
+            patch.object(
+                vacuum,
+                "timer_list",
+                return_value=[
+                    "1-3-08:30-1111111-1-2-1-64-3",
+                    "2-3-09:15-1111100-1-2-1-64-3",
+                    "3-3-10:45-0000011-1-2-1-64-3",
+                    "4-0-11:00-0000000-0-2-1-64-3",
+                ],
+            ),
+            patch("xiao.core.config.get_rooms", return_value={"3": "Kitchen"}),
+        ):
+            schedules = vacuum.schedules_parsed()
+
+        assert [s["days_display"] for s in schedules] == ["Every day", "Weekdays", "Weekends", "One time"]
+        assert schedules[0]["rooms_display"] == ["Kitchen (3)"]
+        assert schedules[0]["repeat"] is True
+        assert schedules[3]["repeat"] is False
+
+
 class TestCloudVacuumFanSpeed:
     # According to official MIoT spec for xiaomi.vacuum.c102gl:
     # siid 2, piid 2 = 'fault' (read-only, uint8 0-255) — NOT fan speed

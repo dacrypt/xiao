@@ -1,3 +1,3 @@
 """xiao - CLI tool to control Xiaomi/Roborock robot vacuums."""
 
-__version__ = "0.1.2"
+__version__ = "0.4.2"
