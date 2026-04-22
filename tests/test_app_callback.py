@@ -1,11 +1,18 @@
 """Tests for the top-level Typer callback on `xiao`."""
 
 import logging
+import re
 from unittest.mock import MagicMock, patch
 
 from typer.testing import CliRunner
 
 runner = CliRunner()
+
+ANSI_RE = re.compile(r"\x1b\[[0-9;]*m")
+
+
+def _plain(text: str) -> str:
+    return ANSI_RE.sub("", text)
 
 
 class TestNoArgsBehavior:
@@ -70,7 +77,7 @@ class TestDoctorCommand:
 
         result = runner.invoke(app, ["doctor", "--help"], env={"XIAO_NO_CTA": "1"})
         assert result.exit_code == 0
-        assert "skip-network" in result.stdout
+        assert "skip-network" in _plain(result.stdout)
 
 
 class TestMcpCommand:
