@@ -19,6 +19,18 @@ from xiao.core.cloud import (
 logger = logging.getLogger(__name__)
 
 
+def _format_schedule_days(days: list[str]) -> str:
+    if not days:
+        return "One time"
+    if len(days) == 7:
+        return "Every day"
+    if days == ["Mon", "Tue", "Wed", "Thu", "Fri"]:
+        return "Weekdays"
+    if days == ["Sat", "Sun"]:
+        return "Weekends"
+    return ", ".join(days)
+
+
 # MIoT spec for xiaomi.vacuum.c102gl (X20+)
 # Discovered via cloud property scan + official miot-spec.org spec:
 # siid 1: device-information (manufacturer, model, serial, firmware, serial-num)
@@ -701,9 +713,7 @@ class CloudVacuumService:
                 for i, ch in enumerate(days_str):
                     if ch == "1":
                         days.append(day_names[i])
-            days_display = ", ".join(days) if days else "No days"
-            if len(days) == 7:
-                days_display = "Every day"
+            days_display = _format_schedule_days(days)
 
             # Parse rooms
             room_ids = [int(r) for r in rooms_str.split(",") if r.strip()]

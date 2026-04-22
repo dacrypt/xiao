@@ -9,7 +9,7 @@ from rich import print as rprint
 from rich.console import Console
 from rich.table import Table
 
-app = typer.Typer(no_args_is_help=True)
+app = typer.Typer(invoke_without_command=True, no_args_is_help=False)
 console = Console()
 
 
@@ -17,6 +17,14 @@ def _vacuum():
     from xiao.cli.app import _vacuum as _get_vacuum
 
     return _get_vacuum()
+
+
+@app.callback()
+def schedule_root(ctx: typer.Context) -> None:
+    """Show schedules by default when no subcommand is given."""
+    if ctx.invoked_subcommand is None:
+        list_schedules(as_json=False)
+        raise typer.Exit(0)
 
 
 @app.command("list")
