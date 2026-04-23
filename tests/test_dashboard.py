@@ -26,3 +26,15 @@ class TestDashboardCollapsibleSections:
         assert 'data-collapsible-section="audio" open' not in html
         assert 'data-collapsible-section="clean-log" open' not in html
         assert 'data-collapsible-section="all-properties" open' not in html
+
+
+class TestDashboardThemeToggle:
+    def test_dashboard_exposes_persistent_dark_light_theme_toggle(self):
+        html = _dashboard_html()
+
+        assert 'class="theme-toggle"' in html
+        assert 'data-theme-option="dark"' in html
+        assert 'data-theme-option="light"' in html
+        assert "const THEME_STORAGE_KEY = 'xiao-theme';" in html
+        assert "document.documentElement.dataset.theme = theme;" in html
+        assert "localStorage.setItem(THEME_STORAGE_KEY, theme);" in html

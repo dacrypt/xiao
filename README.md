@@ -38,7 +38,7 @@ CLI + web dashboard to control a **Xiaomi Robot Vacuum X20+** (model: `xiaomi.va
 - Settings — fan speed, water level, volume, Do-Not-Disturb window.
 - Consumable tracking with remaining life %.
 - Schedule viewer with parsed room / day / setting data.
-- **Mission Control** — glassmorphism web dashboard with real-time status.
+- **Mission Control** — glassmorphism web dashboard with real-time status and a saved dark/light theme toggle.
 - Auto token refresh via a persistent Chromium session (no repeated email 2FA).
 - Full MIoT property/action support for `c102gl`.
 
@@ -387,6 +387,7 @@ Glassmorphism + neon sci-fi dashboard:
 - Consumable health bars (color-coded, days-until-replacement).
 - Cleaning history stats, schedule table, settings panel.
 - Keyboard: `S`=start, `X`=stop, `D`=dock, `F`=find, `R`=refresh.
+- Dark/light theme toggle with saved browser preference.
 - Mobile-first responsive, auto-refresh every 10s.
 
 ### REST API
