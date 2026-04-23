@@ -13,7 +13,6 @@
 - 🔴 FIXED: `status()` mapped state 13 → "In Dock" but official MIoT spec says 13 = "Charging Completed". Fixed 2026-04-02.
 
 ## Improvements Planned
-- 🔵 Dashboard: add dark/light theme toggle
 - 🔵 Sweep type decoding — raw values (448, 467, 472) — NOTE: per official MIoT spec, siid 2 piid 5 is `dry-left-time` (minutes), NOT sweep type. The 448/467/472 values may have been fault codes from piid 2.
 
 ## Research / Exploration
@@ -87,8 +86,9 @@ Sources: Valetudo, python-miio, hass-xiaomi-miot, r/Xiaomi, r/homeassistant
 - OTA firmware management
 
 ## Completed
+- ✅ Dashboard dark/light theme toggle — Mission Control now keeps the current dark glassmorphism default, but adds an explicit light theme switch in the header and persists the user's choice in local storage so daytime use is less fatiguing without re-theming every visit. Added TDD regression coverage for the toggle markup and persistence hook. Research notes: the local README already positions Mission Control as a day-to-day dashboard surface, MDN's `prefers-color-scheme` guidance reinforced shipping named light/dark themes instead of ad-hoc color overrides, and `home-assistant/frontend` persists `selectedTheme` in browser storage with defensive fallbacks, which informed our saved-preference approach and storage guards. (2026-04-23)
+- 🔜 Next planned item: Sweep type decoding cleanup — audit any remaining `sweep_type` references, confirm whether the historical 448/467/472 values came from `fault_code`, and make status/history labels stop implying a non-existent MIoT sweep-type property. (Planned 2026-04-23)
 - ✅ CLI schedule default view + compact cadence labels — `xiao schedule` now shows the parsed schedule table directly without requiring the extra `list` subcommand, and schedule cadence text now compacts common masks to `Every day`, `Weekdays`, `Weekends`, and `One time` for faster scanning. Added TDD regression coverage for both the parser labels and the root CLI behavior. Research notes: local README/docs already positioned schedule viewing as a primary CLI workflow, and Home Assistant's schedule model explicitly treats weekdays as first-class recurrence data rather than a raw bitmask, which reinforced shipping human-readable cadence labels instead of the previous verbose day list. (2026-04-22)
-- 🔜 Next planned item: Dashboard dark/light theme toggle — keep the current glassmorphism default, but add an explicit theme switch so bright daytime use is less fatiguing on laptops/tablets. (Planned 2026-04-22)
 - ✅ Dashboard diagnostics cleanup — collapsed the lower-noise Audio, Clean Log (Raw), and All Properties panels by default using native `<details>/<summary>` sections, while keeping the same content and live refresh hooks once expanded. Added a regression test that failed before the markup change and now locks the collapsed-by-default contract. (2026-04-21)
 - ✅ CLI rooms rename command — added `xiao rooms rename <id> <name>` as a first-class command (same underlying behavior as alias set) so room naming flows are more discoverable. Added TDD regression test (`TestCLIRooms::test_rooms_rename`) that failed before command implementation and passes now. (2026-04-10)
 - ✅ Device list token auto-refresh — `XiaomiCloud.get_devices()` now catches `TokenExpiredError`, refreshes cloud tokens via browser CDP helper, and retries once before surfacing the error. This closes the remaining gap where setup/device listing could still fail on expired Xiaomi cloud sessions even though RPC/property helpers already retried. Added regression tests for both refresh-success and refresh-failure paths. (2026-04-09)

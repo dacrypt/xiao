@@ -11,6 +11,7 @@
    ═══════════════════════════════════════════════════════════════ */
 
 :root {
+  color-scheme: dark;
   --bg: #050510;
   --bg-card: rgba(15, 15, 35, 0.6);
   --bg-card-solid: #0f0f23;
@@ -37,6 +38,33 @@
   --glass-bg: rgba(12, 12, 30, 0.65);
   --glass-border: rgba(255, 255, 255, 0.06);
 }
+
+:root[data-theme="light"] {
+  color-scheme: light;
+  --bg: #f4f7fb;
+  --bg-card: rgba(255, 255, 255, 0.88);
+  --bg-card-solid: #ffffff;
+  --bg-hover: rgba(236, 242, 250, 0.95);
+  --border: rgba(122, 140, 170, 0.2);
+  --border-glow: rgba(0, 212, 170, 0.1);
+  --accent: #008f74;
+  --accent-dim: rgba(0, 143, 116, 0.1);
+  --accent-glow: rgba(0, 143, 116, 0.18);
+  --accent-bright: #00a889;
+  --text: #162033;
+  --text-dim: #63708a;
+  --danger: #d23b5b;
+  --danger-dim: rgba(210, 59, 91, 0.12);
+  --warning: #c78000;
+  --warning-dim: rgba(199, 128, 0, 0.12);
+  --success: #008f74;
+  --blue: #2f6fe4;
+  --blue-dim: rgba(47, 111, 228, 0.12);
+  --purple: #7e56da;
+  --purple-dim: rgba(126, 86, 218, 0.12);
+  --glass-bg: rgba(255, 255, 255, 0.72);
+  --glass-border: rgba(255, 255, 255, 0.7);
+}
 * { margin: 0; padding: 0; box-sizing: border-box; }
 
 body {
@@ -60,6 +88,12 @@ body::before {
   pointer-events: none;
   z-index: 0;
   animation: bgShift 20s ease-in-out infinite alternate;
+}
+:root[data-theme="light"] body::before {
+  background:
+    radial-gradient(ellipse 80% 50% at 20% 20%, rgba(0, 143, 116, 0.08) 0%, transparent 60%),
+    radial-gradient(ellipse 60% 40% at 80% 80%, rgba(47, 111, 228, 0.08) 0%, transparent 60%),
+    radial-gradient(ellipse 50% 50% at 50% 50%, rgba(126, 86, 218, 0.05) 0%, transparent 70%);
 }
 @keyframes bgShift {
   0% { opacity: 0.8; }
@@ -205,6 +239,46 @@ header {
   display: flex;
   align-items: center;
   gap: 16px;
+}
+.theme-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--bg-card);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+.theme-toggle-btn {
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--text-dim);
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.75rem;
+  font-weight: 700;
+  padding: 7px 12px;
+  transition: background 0.2s ease, color 0.2s ease, box-shadow 0.2s ease;
+}
+.theme-toggle-btn.active {
+  background: var(--accent-dim);
+  color: var(--accent);
+  box-shadow: inset 0 0 0 1px var(--border-glow);
+}
+.theme-toggle-btn:hover {
+  color: var(--text);
+}
+.theme-toggle-btn:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+@media (max-width: 600px) {
+  .theme-toggle-label {
+    display: none;
+  }
 }
 .conn-status {
   display: flex;
@@ -365,7 +439,7 @@ header {
   width: 100%;
   height: 100%;
 }
-.vacuum-body { fill: #1a1a3a; stroke: var(--accent); stroke-width: 1.5; }
+.vacuum-body { fill: var(--bg-card-solid); stroke: var(--accent); stroke-width: 1.5; }
 .vacuum-eye { fill: var(--accent); }
 .vacuum-ring-outer { fill: none; stroke: rgba(0,212,170,0.15); stroke-width: 2; }
 /* Animations for different states */
@@ -375,7 +449,7 @@ header {
 .vacuum-svg-wrap.docked .vacuum-eye { fill: var(--text-dim); }
 .vacuum-svg-wrap.charging .vacuum-eye { animation: vacCharge 2s ease-in-out infinite; }
 @keyframes vacClean {
-  0%, 100% { fill: #1a1a3a; }
+  0%, 100% { fill: var(--bg-card-solid); }
   50% { fill: #1a2a3a; }
 }
 @keyframes vacEyePulse {
@@ -412,7 +486,7 @@ header {
   font-size: 0.68rem;
   padding: 4px 10px;
   border-radius: 8px;
-  background: rgba(20, 20, 50, 0.8);
+  background: var(--bg-hover);
   border: 1px solid var(--border);
   color: var(--text-dim);
   display: flex;
@@ -475,7 +549,7 @@ header {
   padding: 14px 10px;
   border: 1px solid var(--border);
   border-radius: 12px;
-  background: rgba(15, 15, 40, 0.6);
+  background: var(--bg-card);
   color: var(--text);
   cursor: pointer;
   font-family: inherit;
@@ -518,7 +592,7 @@ header {
   padding: 16px 12px;
   border: 1px solid var(--border);
   border-radius: 12px;
-  background: rgba(15, 15, 40, 0.5);
+  background: var(--bg-card);
   color: var(--text-dim);
   cursor: pointer;
   font-family: inherit;
@@ -565,7 +639,7 @@ header {
   padding: 6px 12px;
   border: 1px solid var(--border);
   border-radius: 8px;
-  background: rgba(15, 15, 40, 0.5);
+  background: var(--bg-card);
   color: var(--text-dim);
   cursor: pointer;
   font-family: inherit;
@@ -590,7 +664,7 @@ header {
   padding: 18px 10px;
   border: 1px solid var(--border);
   border-radius: 12px;
-  background: rgba(15, 15, 40, 0.5);
+  background: var(--bg-card);
   color: var(--text);
   cursor: pointer;
   font-family: inherit;
@@ -636,7 +710,7 @@ header {
 .consumable-pct.low { color: var(--danger); }
 .consumable-track {
   height: 8px;
-  background: rgba(50, 50, 100, 0.2);
+  background: var(--border);
   border-radius: 4px;
   overflow: hidden;
   position: relative;
@@ -680,7 +754,7 @@ header {
   text-align: center;
   padding: 12px;
   border-radius: 12px;
-  background: rgba(15, 15, 40, 0.5);
+  background: var(--bg-card);
   border: 1px solid var(--border);
 }
 .hist-val {
@@ -721,7 +795,7 @@ header {
   padding: 10px 4px;
   border: 1px solid var(--border);
   border-radius: 8px;
-  background: rgba(15, 15, 40, 0.5);
+  background: var(--bg-card);
   color: var(--text-dim);
   cursor: pointer;
   font-family: inherit;
@@ -765,7 +839,7 @@ input[type=range] {
   flex: 1;
   height: 4px;
   border-radius: 2px;
-  background: rgba(50, 50, 100, 0.3);
+  background: var(--border);
   outline: none;
 }
 input[type=range]::-webkit-slider-thumb {
@@ -787,7 +861,7 @@ input[type=range]::-webkit-slider-thumb:hover {
 .toggle {
   width: 44px; height: 24px;
   border-radius: 12px;
-  background: rgba(50, 50, 100, 0.3);
+  background: var(--border);
   position: relative;
   cursor: pointer;
   transition: background 0.3s;
@@ -807,7 +881,7 @@ input[type=range]::-webkit-slider-thumb:hover {
 .toggle.on::after { transform: translateX(20px); }
 .dnd-times { font-size: 0.75rem; color: var(--text-dim); display: flex; align-items: center; gap: 4px; }
 .dnd-times input {
-  background: rgba(15, 15, 40, 0.8);
+  background: var(--bg-card);
   border: 1px solid var(--border);
   border-radius: 6px;
   color: var(--text);
@@ -860,7 +934,7 @@ input[type=range]::-webkit-slider-thumb:hover {
   font-size: 0.78rem;
   padding: 8px 12px;
   border-radius: 8px;
-  background: rgba(15, 15, 40, 0.4);
+  background: var(--bg-card);
 }
 .info-key { color: var(--text-dim); }
 .info-val { color: var(--text); font-weight: 600; font-size: 0.72rem; }
@@ -909,7 +983,7 @@ input[type=range]::-webkit-slider-thumb:hover {
   left: 0; right: 0;
   padding: 12px 16px;
   padding-bottom: calc(12px + env(safe-area-inset-bottom, 0));
-  background: rgba(8, 8, 20, 0.9);
+  background: var(--bg-card-solid);
   backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
   border-top: 1px solid var(--border);
@@ -923,7 +997,7 @@ input[type=range]::-webkit-slider-thumb:hover {
   padding: 10px 16px;
   border: 1px solid var(--border);
   border-radius: 12px;
-  background: rgba(15, 15, 40, 0.8);
+  background: var(--bg-card);
   color: var(--text);
   cursor: pointer;
   font-family: inherit;
@@ -980,7 +1054,7 @@ input[type=range]::-webkit-slider-thumb:hover {
 
 /* ── Skeleton ──────────────────────────────────────────────── */
 .skeleton {
-  background: linear-gradient(90deg, rgba(50,50,100,0.2) 25%, rgba(50,50,100,0.35) 50%, rgba(50,50,100,0.2) 75%);
+  background: linear-gradient(90deg, var(--border) 25%, rgba(255,255,255,0.22) 50%, var(--border) 75%);
   background-size: 200% 100%;
   animation: shimmer 1.5s infinite;
   border-radius: 6px;
@@ -990,6 +1064,22 @@ input[type=range]::-webkit-slider-thumb:hover {
 @keyframes shimmer {
   0% { background-position: 200% 0; }
   100% { background-position: -200% 0; }
+}
+
+:root[data-theme="light"] .glass:hover {
+  box-shadow: 0 12px 30px rgba(22, 32, 51, 0.08);
+}
+
+:root[data-theme="light"] header {
+  background: linear-gradient(180deg, rgba(244, 247, 251, 0.94), rgba(244, 247, 251, 0.7));
+}
+
+:root[data-theme="light"] .sched-table tr:hover td {
+  background: rgba(0, 143, 116, 0.05);
+}
+
+:root[data-theme="light"] .toast {
+  box-shadow: 0 10px 30px rgba(22, 32, 51, 0.08);
 }
 
 /* ── Confirm Dialog ────────────────────────────────────────── */
@@ -1047,7 +1137,7 @@ input[type=range]::-webkit-slider-thumb:hover {
 .signal-bar {
   width: 6px;
   border-radius: 2px;
-  background: rgba(50, 50, 100, 0.3);
+  background: var(--border);
   transition: background 0.3s;
 }
 .signal-bar:nth-child(1) { height: 25%; }
@@ -1066,7 +1156,7 @@ input[type=range]::-webkit-slider-thumb:hover {
   margin-bottom: 16px;
   padding: 12px 16px;
   border-radius: 12px;
-  background: rgba(15, 15, 40, 0.5);
+  background: var(--bg-card);
   border: 1px solid var(--border);
 }
 .net-signal-wrap {
@@ -1123,7 +1213,7 @@ input[type=range]::-webkit-slider-thumb:hover {
   gap: 8px;
   padding: 8px 12px;
   border-radius: 8px;
-  background: rgba(15, 15, 40, 0.4);
+  background: var(--bg-card);
   font-size: 0.75rem;
 }
 .net-item .net-icon { font-size: 1rem; flex-shrink: 0; width: 20px; text-align: center; }
@@ -1140,7 +1230,7 @@ input[type=range]::-webkit-slider-thumb:hover {
   text-align: center;
   padding: 10px 8px;
   border-radius: 10px;
-  background: rgba(15, 15, 40, 0.5);
+  background: var(--bg-card);
   border: 1px solid var(--border);
 }
 .cleanlog-val {
@@ -1171,7 +1261,7 @@ input[type=range]::-webkit-slider-thumb:hover {
   font-size: 0.68rem;
   padding: 4px 10px;
   border-radius: 8px;
-  background: rgba(20, 20, 50, 0.8);
+  background: var(--bg-hover);
   border: 1px solid var(--border);
   color: var(--text-dim);
 }
@@ -1311,7 +1401,7 @@ input[type=range]::-webkit-slider-thumb:hover {
   padding: 8px 14px;
   border: 1px solid var(--border);
   border-radius: 10px;
-  background: rgba(15, 15, 40, 0.6);
+  background: var(--bg-card);
   color: var(--text);
   cursor: pointer;
   font-family: inherit;
@@ -1375,13 +1465,21 @@ input[type=range]::-webkit-slider-thumb:hover {
     <!-- Inline vacuum SVG logo -->
     <svg class="logo-icon" viewBox="0 0 36 36" width="36" height="36">
       <circle cx="18" cy="18" r="16" fill="none" stroke="var(--accent)" stroke-width="1" opacity="0.3"/>
-      <circle cx="18" cy="18" r="12" fill="#0f0f23" stroke="var(--accent)" stroke-width="1.5"/>
+      <circle cx="18" cy="18" r="12" fill="var(--bg-card-solid)" stroke="var(--accent)" stroke-width="1.5"/>
       <circle cx="18" cy="18" r="3" fill="var(--accent)" opacity="0.8"/>
     </svg>
     <div><span>X20+</span> MISSION CONTROL</div>
   </div>
   <div class="header-right">
     <span class="kbd-hint">S start · X stop · D dock · F find · R refresh</span>
+    <div class="theme-toggle" role="group" aria-label="Theme toggle">
+      <button class="theme-toggle-btn active" id="themeDarkBtn" data-theme-option="dark" type="button" onclick="setTheme('dark')" aria-pressed="true">
+        🌙 <span class="theme-toggle-label">Dark</span>
+      </button>
+      <button class="theme-toggle-btn" id="themeLightBtn" data-theme-option="light" type="button" onclick="setTheme('light')" aria-pressed="false">
+        ☀️ <span class="theme-toggle-label">Light</span>
+      </button>
+    </div>
     <span class="last-refresh" id="lastRefreshLabel">--</span>
     <div class="refresh-ring" onclick="manualRefresh()" title="Refresh (R)">
       <svg viewBox="0 0 32 32" width="24" height="24" id="refreshIcon">
@@ -1716,6 +1814,41 @@ let refreshCountdownTimer = null;
 let lastRefreshTs = 0;
 let stateTimeline = [];
 let currentDndEnabled = false;
+const THEME_STORAGE_KEY = 'xiao-theme';
+
+function getSavedTheme() {
+  try {
+    return localStorage.getItem(THEME_STORAGE_KEY);
+  } catch (err) {
+    console.warn('Theme preference unavailable, using default theme.', err);
+    return null;
+  }
+}
+
+function applyTheme(theme) {
+  document.documentElement.dataset.theme = theme;
+  try {
+    localStorage.setItem(THEME_STORAGE_KEY, theme);
+  } catch (err) {
+    console.warn('Unable to persist theme preference.', err);
+  }
+
+  const darkBtn = document.getElementById('themeDarkBtn');
+  const lightBtn = document.getElementById('themeLightBtn');
+  if (!darkBtn || !lightBtn) return;
+
+  darkBtn.classList.toggle('active', theme === 'dark');
+  lightBtn.classList.toggle('active', theme === 'light');
+  darkBtn.setAttribute('aria-pressed', String(theme === 'dark'));
+  lightBtn.setAttribute('aria-pressed', String(theme === 'light'));
+}
+
+function setTheme(theme) {
+  applyTheme(theme);
+}
+
+const savedTheme = getSavedTheme();
+applyTheme(savedTheme === 'light' ? 'light' : 'dark');
 
 // ── Cleaning State Map ─────────────────────────────────────
 const STATE_MAP = {
