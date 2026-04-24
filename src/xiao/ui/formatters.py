@@ -78,6 +78,10 @@ def render_status(data: dict[str, Any]) -> None:
     if charging is not None:
         lines.append(f"  [bold]Charging:[/bold] {charging}")
 
+    dry_left = data.get("dry_left_time_min")
+    if dry_left is not None:
+        lines.append(f"  [bold]Dry Left:[/bold] {_format_time(dry_left)}")
+
     # Show any extra properties not already displayed
     shown = {
         "state",
@@ -89,8 +93,8 @@ def render_status(data: dict[str, Any]) -> None:
         "is_on",
         "mode",
         "charging",
+        "dry_left_time_min",
         "fan_level_raw",
-        "sweep_type",
         "dnd",
         "water",
         "consumables",
@@ -129,6 +133,10 @@ def render_full_status(data: dict[str, Any]) -> None:
     charging = data.get("charging")
     if charging is not None:
         lines.append(f"  [bold]Charging:[/bold]   {charging}")
+
+    dry_left = data.get("dry_left_time_min")
+    if dry_left is not None:
+        lines.append(f"  [bold]Dry Left:[/bold]   {_format_time(dry_left)}")
 
     # Water level
     water = data.get("water", {})
