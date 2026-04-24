@@ -1860,7 +1860,7 @@ const STATE_MAP = {
   'Error':                 { display: 'Error',          color: 'red',    icon: '❌',  cssClass: 'docked' },
   'Go Charging':           { display: 'Returning',      color: 'orange', icon: '🏠',  cssClass: 'returning' },
   'Charging':              { display: 'Charging',       color: 'yellow', icon: '⚡',  cssClass: 'charging' },
-  'In Dock':               { display: 'In Dock',        color: 'green',  icon: '🏠',  cssClass: 'docked' },
+  'Charging Completed':    { display: 'Charging Completed', color: 'green',  icon: '🏠',  cssClass: 'docked' },
   'Drying':                { display: 'Drying Mop',     color: 'blue',   icon: '💨',  cssClass: 'docked' },
   'Washing mop':           { display: 'Washing Mop',    color: 'blue',   icon: '🧽',  cssClass: 'docked' },
   'Go Washing':            { display: 'Going to Wash',  color: 'blue',   icon: '🧽',  cssClass: 'returning' },
@@ -2018,11 +2018,11 @@ async function refreshStatus() {
     // Pulse text when actively cleaning
     stateEl.classList.toggle('pulse-text', !!info.pulse);
 
-    // Status tags — mode, fan, sweep_type, DND
+    // Status tags — mode, fan, dry time, DND
     const tags = document.getElementById('statusTags');
     let tagsHtml = '';
     // Determine cleaning mode display
-    const sweepType = d.sweep_type;
+    const dryLeftTimeMin = d.dry_left_time_min;
     if (state.includes('Mopping') && !state.includes('Sweeping')) {
       tagsHtml += `<span class="tag" style="border-color:var(--blue)">🧽 <span class="val" style="color:var(--blue)">Mop Only</span></span>`;
     } else if (state.includes('Sweeping') && state.includes('Mopping')) {
@@ -2033,8 +2033,8 @@ async function refreshStatus() {
       tagsHtml += `<span class="tag">Mode <span class="val">${d.mode}</span></span>`;
     }
     if (d.fan || d.fan_speed) tagsHtml += `<span class="tag">🌀 <span class="val">${d.fan || d.fan_speed}</span></span>`;
-    if (sweepType !== undefined && sweepType !== null) {
-      tagsHtml += `<span class="tag">Type <span class="val">${sweepType}</span></span>`;
+    if (dryLeftTimeMin !== undefined && dryLeftTimeMin !== null && state.includes('Drying')) {
+      tagsHtml += `<span class="tag">💨 <span class="val">Dry Left ${dryLeftTimeMin} min</span></span>`;
     }
     // DND indicator
     if (currentDndEnabled) {
@@ -2755,7 +2755,7 @@ async function refreshAllProperties() {
     const stateNames = {
       1: 'Sweeping', 2: 'Idle', 3: 'Paused', 4: 'Error', 5: 'Go Charging',
       6: 'Charging', 7: 'Mopping', 8: 'Drying', 9: 'Washing Mop',
-      10: 'Go Washing', 11: 'Building Map', 12: 'Sweep & Mop', 13: 'In Dock',
+      10: 'Go Washing', 11: 'Building Map', 12: 'Sweep & Mop', 13: 'Charging Completed',
       14: 'Upgrading', 19: 'Water Inspecting', 21: 'Water Tank Alert',
       22: 'Dust Collecting', 23: 'Remote Clean',
     };
@@ -2809,8 +2809,8 @@ async function refreshAllProperties() {
           </div>
           <div class="net-item">
             <span class="net-icon">💨</span>
-            <span class="net-label">Sweep Type / Dry Time</span>
-            <span class="net-val">${statusInfo.sweep_type_or_dry_time || 0}</span>
+            <span class="net-label">Dry Time Left</span>
+            <span class="net-val">${statusInfo.dry_left_time_min || 0} min</span>
           </div>
           <div class="net-item">
             <span class="net-icon">🔄</span>

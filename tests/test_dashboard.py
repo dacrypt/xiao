@@ -38,3 +38,13 @@ class TestDashboardThemeToggle:
         assert "const THEME_STORAGE_KEY = 'xiao-theme';" in html
         assert "document.documentElement.dataset.theme = theme;" in html
         assert "localStorage.setItem(THEME_STORAGE_KEY, theme);" in html
+
+
+class TestDashboardDryTimeCopy:
+    def test_dashboard_uses_dry_time_wording_instead_of_stale_sweep_type_labels(self):
+        html = _dashboard_html()
+
+        assert "const dryLeftTimeMin = d.dry_left_time_min;" in html
+        assert "Dry Time Left" in html
+        assert "d.sweep_type" not in html
+        assert "Sweep Type / Dry Time" not in html
