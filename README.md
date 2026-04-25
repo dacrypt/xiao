@@ -208,6 +208,9 @@ Every command. One row each. Full catalog also lives in [AGENTS.md](AGENTS.md).
 | `xiao settings water <level>` | Mop water: `low` \| `medium` \| `high` | no arg → print current |
 | `xiao settings volume <0-100>` | Voice volume | no arg → print current |
 | `xiao settings dnd on/off` | Do-not-disturb | `--start HH:MM --end HH:MM` |
+| `xiao settings resume-after-charge on/off` | Auto-resume cleaning after charging | no arg → print current |
+| `xiao settings carpet-boost on/off` | Boost suction on carpets | no arg → print current |
+| `xiao settings child-lock on/off` | Lock physical buttons on the robot | no arg → print current |
 | `xiao map rooms` | List room IDs → names | — |
 | `xiao map show` | Show raw map metadata from the cloud | — |
 | `xiao rooms alias <id> "<name>"` | Add friendly-name alias | — |
@@ -310,10 +313,14 @@ xiao settings water high         # low | medium | high (mop water level)
 xiao settings volume 50          # 0-100
 xiao settings dnd on --start 22:00 --end 07:00
 xiao settings dnd off
+xiao settings resume-after-charge on
+xiao settings carpet-boost off
+xiao settings child-lock on
 
 # Call any of the above without an argument to print the current value:
 xiao settings speed              # → Current fan speed: turbo
-xiao settings water              # → Water level: High (raw: High)
+xiao settings water              # → Water level: High (raw: 3)
+xiao settings child-lock         # → Child lock: Off (raw: 0)
 ```
 
 ### Machine-readable output
