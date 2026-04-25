@@ -183,6 +183,48 @@ class TestCLISettings:
             result = runner.invoke(app, ["settings", "volume"])
         assert result.exit_code == 0
 
+    def test_resume_after_charge_get(self, mock_vacuum):
+        from xiao.cli.app import app
+
+        mock_vacuum.resume_after_charge.return_value = {"enabled": True, "raw": 1}
+
+        with patch("xiao.cli.app._vacuum", return_value=mock_vacuum):
+            result = runner.invoke(app, ["settings", "resume-after-charge"])
+
+        assert result.exit_code == 0
+        assert "Resume after charge" in result.stdout
+        assert "On" in result.stdout
+
+    def test_resume_after_charge_set(self, mock_vacuum):
+        from xiao.cli.app import app
+
+        with patch("xiao.cli.app._vacuum", return_value=mock_vacuum):
+            result = runner.invoke(app, ["settings", "resume-after-charge", "off"])
+
+        assert result.exit_code == 0
+        mock_vacuum.set_resume_after_charge.assert_called_once_with(False)
+
+    def test_carpet_boost_set(self, mock_vacuum):
+        from xiao.cli.app import app
+
+        with patch("xiao.cli.app._vacuum", return_value=mock_vacuum):
+            result = runner.invoke(app, ["settings", "carpet-boost", "on"])
+
+        assert result.exit_code == 0
+        mock_vacuum.set_carpet_boost.assert_called_once_with(True)
+
+    def test_child_lock_get(self, mock_vacuum):
+        from xiao.cli.app import app
+
+        mock_vacuum.child_lock.return_value = {"enabled": False, "raw": 0}
+
+        with patch("xiao.cli.app._vacuum", return_value=mock_vacuum):
+            result = runner.invoke(app, ["settings", "child-lock"])
+
+        assert result.exit_code == 0
+        assert "Child lock" in result.stdout
+        assert "Off" in result.stdout
+
 
 class TestCLIDevice:
     def test_device_info(self, mock_vacuum):

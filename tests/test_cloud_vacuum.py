@@ -406,6 +406,43 @@ class TestCloudVacuumWaterLevel:
             assert data.get("water_level") == expected, f"mop-mode value={val} should decode to '{expected}'"
 
 
+class TestCloudVacuumAdvancedSettings:
+    @pytest.mark.parametrize(
+        ("getter_name", "setter_name", "piid"),
+        [
+            ("resume_after_charge", "set_resume_after_charge", 11),
+            ("carpet_boost", "set_carpet_boost", 12),
+            ("child_lock", "set_child_lock", 27),
+        ],
+    )
+    def test_boolean_setting_reads_from_vacuum_extend(self, vacuum, getter_name, setter_name, piid):
+        mock_results = [{"siid": 4, "piid": piid, "code": 0, "value": 1}]
+
+        with patch("xiao.core.cloud_vacuum.cloud_get_properties", return_value=mock_results) as mock_get:
+            data = getattr(vacuum, getter_name)()
+
+        called_props = mock_get.call_args[0][2]
+        assert called_props == [{"siid": 4, "piid": piid}]
+        assert data["enabled"] is True
+        assert data["raw"] == 1
+
+    @pytest.mark.parametrize(
+        ("setter_name", "piid", "enabled"),
+        [
+            ("set_resume_after_charge", 11, True),
+            ("set_resume_after_charge", 11, False),
+            ("set_carpet_boost", 12, True),
+            ("set_child_lock", 27, False),
+        ],
+    )
+    def test_boolean_setting_writes_to_vacuum_extend(self, vacuum, setter_name, piid, enabled):
+        with patch("xiao.core.cloud_vacuum.cloud_set_properties", return_value=[{"code": 0}]) as mock_set:
+            getattr(vacuum, setter_name)(enabled)
+
+        called_props = mock_set.call_args[0][2]
+        assert called_props == [{"siid": 4, "piid": piid, "value": 1 if enabled else 0}]
+
+
 class TestCloudVacuumStatusCodes:
     """Tests for status code decoding per official MIoT spec."""
 

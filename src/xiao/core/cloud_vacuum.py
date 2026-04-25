@@ -606,6 +606,51 @@ class CloudVacuumService:
     # NOTE: siid 18 piid 1 is mop-life-level (read-only %) — NOT water level!
     WATER_LEVELS = {"low": 1, "medium": 2, "high": 3}
     WATER_LEVEL_NAMES = {1: "low", 2: "medium", 3: "high"}
+    BOOLEAN_SETTINGS = {
+        "resume_after_charge": {"siid": 4, "piid": 11},
+        "carpet_boost": {"siid": 4, "piid": 12},
+        "child_lock": {"siid": 4, "piid": 27},
+    }
+
+    def _boolean_setting(self, name: str) -> dict[str, Any]:
+        spec = self.BOOLEAN_SETTINGS[name]
+        results = cloud_get_properties(
+            self.cloud,
+            self.did,
+            [{"siid": spec["siid"], "piid": spec["piid"]}],
+            country=self.country,
+        )
+        if results and results[0].get("code", 0) == 0:
+            raw = results[0].get("value")
+            return {"enabled": bool(raw), "raw": raw}
+        return {"enabled": False, "raw": None}
+
+    def _set_boolean_setting(self, name: str, enabled: bool) -> list:
+        spec = self.BOOLEAN_SETTINGS[name]
+        return cloud_set_properties(
+            self.cloud,
+            self.did,
+            [{"siid": spec["siid"], "piid": spec["piid"], "value": 1 if enabled else 0}],
+            country=self.country,
+        )
+
+    def resume_after_charge(self) -> dict[str, Any]:
+        return self._boolean_setting("resume_after_charge")
+
+    def set_resume_after_charge(self, enabled: bool) -> list:
+        return self._set_boolean_setting("resume_after_charge", enabled)
+
+    def carpet_boost(self) -> dict[str, Any]:
+        return self._boolean_setting("carpet_boost")
+
+    def set_carpet_boost(self, enabled: bool) -> list:
+        return self._set_boolean_setting("carpet_boost", enabled)
+
+    def child_lock(self) -> dict[str, Any]:
+        return self._boolean_setting("child_lock")
+
+    def set_child_lock(self, enabled: bool) -> list:
+        return self._set_boolean_setting("child_lock", enabled)
 
     def water_level(self) -> dict[str, Any]:
         """Read mop water flow setting from vacuum-extend service.

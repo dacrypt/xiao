@@ -1,4 +1,4 @@
-"""Device settings — fan speed, DND, volume, water level."""
+"""Device settings, fan speed, DND, volume, water level, and vacuum-extend toggles."""
 
 from __future__ import annotations
 
@@ -12,6 +12,36 @@ def _vacuum():
     from xiao.cli.app import _vacuum as _get_vacuum
 
     return _get_vacuum()
+
+
+def _parse_toggle(value: str) -> bool:
+    normalized = value.strip().lower()
+    if normalized in {"on", "true", "1", "yes", "enable", "enabled"}:
+        return True
+    if normalized in {"off", "false", "0", "no", "disable", "disabled"}:
+        return False
+    raise ValueError("Toggle must be on/off")
+
+
+def _render_toggle_setting(label: str, getter_name: str, setter_name: str, toggle: str | None) -> None:
+    vac = _vacuum()
+    if toggle is not None:
+        try:
+            enabled = _parse_toggle(toggle)
+            getattr(vac, setter_name)(enabled)
+            rprint(f"[green]{label} set to {'On' if enabled else 'Off'}.[/green]")
+        except (AttributeError, ValueError) as e:
+            rprint(f"[red]{e}[/red]")
+        return
+
+    try:
+        data = getattr(vac, getter_name)()
+        state = "On" if data.get("enabled") else "Off"
+        raw = data.get("raw")
+        raw_suffix = f" (raw: {raw})" if raw is not None else ""
+        rprint(f"[cyan]{label}:[/cyan] {state}{raw_suffix}")
+    except (AttributeError, Exception) as e:
+        rprint(f"[yellow]{label} not available: {e}[/yellow]")
 
 
 @app.command()
@@ -90,3 +120,27 @@ def water(
                 rprint(f"[cyan]Mop mode raw:[/cyan] {mm}")
         except (AttributeError, Exception) as e:
             rprint(f"[yellow]Water level not available: {e}[/yellow]")
+
+
+@app.command()
+def resume_after_charge(
+    toggle: str | None = typer.Argument(None, help="on/off"),
+):
+    """Get or set automatic resume after charging."""
+    _render_toggle_setting("Resume after charge", "resume_after_charge", "set_resume_after_charge", toggle)
+
+
+@app.command()
+def carpet_boost(
+    toggle: str | None = typer.Argument(None, help="on/off"),
+):
+    """Get or set carpet boost."""
+    _render_toggle_setting("Carpet boost", "carpet_boost", "set_carpet_boost", toggle)
+
+
+@app.command()
+def child_lock(
+    toggle: str | None = typer.Argument(None, help="on/off"),
+):
+    """Get or set child lock."""
+    _render_toggle_setting("Child lock", "child_lock", "set_child_lock", toggle)
