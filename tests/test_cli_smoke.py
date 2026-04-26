@@ -225,6 +225,27 @@ class TestCLISettings:
         assert "Child lock" in result.stdout
         assert "Off" in result.stdout
 
+    def test_smart_wash_get(self, mock_vacuum):
+        from xiao.cli.app import app
+
+        mock_vacuum.smart_wash.return_value = {"enabled": True, "raw": 1}
+
+        with patch("xiao.cli.app._vacuum", return_value=mock_vacuum):
+            result = runner.invoke(app, ["settings", "smart-wash"])
+
+        assert result.exit_code == 0
+        assert "Smart wash" in result.stdout
+        assert "On" in result.stdout
+
+    def test_smart_wash_set(self, mock_vacuum):
+        from xiao.cli.app import app
+
+        with patch("xiao.cli.app._vacuum", return_value=mock_vacuum):
+            result = runner.invoke(app, ["settings", "smart-wash", "off"])
+
+        assert result.exit_code == 0
+        mock_vacuum.set_smart_wash.assert_called_once_with(False)
+
 
 class TestCLIDevice:
     def test_device_info(self, mock_vacuum):

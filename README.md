@@ -211,6 +211,7 @@ Every command. One row each. Full catalog also lives in [AGENTS.md](AGENTS.md).
 | `xiao settings resume-after-charge on/off` | Auto-resume cleaning after charging | no arg → print current |
 | `xiao settings carpet-boost on/off` | Boost suction on carpets | no arg → print current |
 | `xiao settings child-lock on/off` | Lock physical buttons on the robot | no arg → print current |
+| `xiao settings smart-wash on/off` | Toggle smart mop washing at the base station | no arg → print current |
 | `xiao map rooms` | List room IDs → names | — |
 | `xiao map show` | Show raw map metadata from the cloud | — |
 | `xiao rooms alias <id> "<name>"` | Add friendly-name alias | — |
@@ -316,11 +317,13 @@ xiao settings dnd off
 xiao settings resume-after-charge on
 xiao settings carpet-boost off
 xiao settings child-lock on
+xiao settings smart-wash on
 
 # Call any of the above without an argument to print the current value:
 xiao settings speed              # → Current fan speed: turbo
 xiao settings water              # → Water level: High (raw: 3)
 xiao settings child-lock         # → Child lock: Off (raw: 0)
+xiao settings smart-wash         # → Smart wash: On (raw: 1)
 ```
 
 ### Machine-readable output
@@ -408,6 +411,7 @@ All endpoints at `http://localhost:8120/api/` — use these for **programmatic /
 | `/consumables` | GET | Brush / filter health |
 | `/rooms` | GET | Room list |
 | `/schedules` | GET | Parsed schedules |
+| `/settings` | GET | DND, volume, fan, water, smart-wash snapshot |
 | `/start` | POST | Start clean |
 | `/stop` | POST | Stop |
 | `/dock` | POST | Return to dock |
