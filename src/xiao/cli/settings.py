@@ -144,3 +144,11 @@ def child_lock(
 ):
     """Get or set child lock."""
     _render_toggle_setting("Child lock", "child_lock", "set_child_lock", toggle)
+
+
+@app.command()
+def smart_wash(
+    toggle: str | None = typer.Argument(None, help="on/off"),
+):
+    """Get or set smart mop washing at the base station."""
+    _render_toggle_setting("Smart wash", "smart_wash", "set_smart_wash", toggle)

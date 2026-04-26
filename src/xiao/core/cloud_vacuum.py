@@ -610,6 +610,7 @@ class CloudVacuumService:
         "resume_after_charge": {"siid": 4, "piid": 11},
         "carpet_boost": {"siid": 4, "piid": 12},
         "child_lock": {"siid": 4, "piid": 27},
+        "smart_wash": {"siid": 4, "piid": 34},
     }
 
     def _boolean_setting(self, name: str) -> dict[str, Any]:
@@ -651,6 +652,12 @@ class CloudVacuumService:
 
     def set_child_lock(self, enabled: bool) -> list:
         return self._set_boolean_setting("child_lock", enabled)
+
+    def smart_wash(self) -> dict[str, Any]:
+        return self._boolean_setting("smart_wash")
+
+    def set_smart_wash(self, enabled: bool) -> list:
+        return self._set_boolean_setting("smart_wash", enabled)
 
     def water_level(self) -> dict[str, Any]:
         """Read mop water flow setting from vacuum-extend service.

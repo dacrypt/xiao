@@ -413,6 +413,7 @@ class TestCloudVacuumAdvancedSettings:
             ("resume_after_charge", "set_resume_after_charge", 11),
             ("carpet_boost", "set_carpet_boost", 12),
             ("child_lock", "set_child_lock", 27),
+            ("smart_wash", "set_smart_wash", 34),
         ],
     )
     def test_boolean_setting_reads_from_vacuum_extend(self, vacuum, getter_name, setter_name, piid):
@@ -433,6 +434,8 @@ class TestCloudVacuumAdvancedSettings:
             ("set_resume_after_charge", 11, False),
             ("set_carpet_boost", 12, True),
             ("set_child_lock", 27, False),
+            ("set_smart_wash", 34, True),
+            ("set_smart_wash", 34, False),
         ],
     )
     def test_boolean_setting_writes_to_vacuum_extend(self, vacuum, setter_name, piid, enabled):

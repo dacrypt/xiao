@@ -216,9 +216,12 @@ def create_app() -> FastAPI:
             vol = vac.volume()
             fan = vac.fan_speed()
             water = {}
+            smart_wash = {}
             with contextlib.suppress(Exception):
                 water = vac.water_level()
-            return {"dnd": dnd, "volume": vol, "fan_speed": fan, "water": water}
+            with contextlib.suppress(Exception):
+                smart_wash = vac.smart_wash()
+            return {"dnd": dnd, "volume": vol, "fan_speed": fan, "water": water, "smart_wash": smart_wash}
         except Exception as e:
             logger.exception("settings failed")
             raise HTTPException(500, detail=str(e)) from e
