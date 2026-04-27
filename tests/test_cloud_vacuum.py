@@ -445,6 +445,29 @@ class TestCloudVacuumAdvancedSettings:
         called_props = mock_set.call_args[0][2]
         assert called_props == [{"siid": 4, "piid": piid, "value": 1 if enabled else 0}]
 
+    def test_clean_rags_tip_reads_minutes_from_vacuum_extend(self, vacuum):
+        mock_results = [{"siid": 4, "piid": 16, "code": 0, "value": 45}]
+
+        with patch("xiao.core.cloud_vacuum.cloud_get_properties", return_value=mock_results) as mock_get:
+            data = vacuum.clean_rags_tip()
+
+        called_props = mock_get.call_args[0][2]
+        assert called_props == [{"siid": 4, "piid": 16}]
+        assert data == {"minutes": 45, "raw": 45}
+
+    @pytest.mark.parametrize("minutes", [0, 30, 120])
+    def test_clean_rags_tip_writes_valid_minutes_to_vacuum_extend(self, vacuum, minutes):
+        with patch("xiao.core.cloud_vacuum.cloud_set_properties", return_value=[{"code": 0}]) as mock_set:
+            vacuum.set_clean_rags_tip(minutes)
+
+        called_props = mock_set.call_args[0][2]
+        assert called_props == [{"siid": 4, "piid": 16, "value": minutes}]
+
+    @pytest.mark.parametrize("minutes", [-1, 121])
+    def test_clean_rags_tip_rejects_out_of_range_minutes(self, vacuum, minutes):
+        with pytest.raises(ValueError, match="0 and 120"):
+            vacuum.set_clean_rags_tip(minutes)
+
 
 class TestCloudVacuumStatusCodes:
     """Tests for status code decoding per official MIoT spec."""

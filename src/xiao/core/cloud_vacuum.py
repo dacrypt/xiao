@@ -612,6 +612,9 @@ class CloudVacuumService:
         "child_lock": {"siid": 4, "piid": 27},
         "smart_wash": {"siid": 4, "piid": 34},
     }
+    INTEGER_SETTINGS = {
+        "clean_rags_tip": {"siid": 4, "piid": 16, "min": 0, "max": 120},
+    }
 
     def _boolean_setting(self, name: str) -> dict[str, Any]:
         spec = self.BOOLEAN_SETTINGS[name]
@@ -632,6 +635,32 @@ class CloudVacuumService:
             self.cloud,
             self.did,
             [{"siid": spec["siid"], "piid": spec["piid"], "value": 1 if enabled else 0}],
+            country=self.country,
+        )
+
+    def _integer_setting(self, name: str) -> dict[str, Any]:
+        spec = self.INTEGER_SETTINGS[name]
+        results = cloud_get_properties(
+            self.cloud,
+            self.did,
+            [{"siid": spec["siid"], "piid": spec["piid"]}],
+            country=self.country,
+        )
+        if results and results[0].get("code", 0) == 0:
+            raw = results[0].get("value")
+            return {"minutes": raw, "raw": raw}
+        return {"minutes": None, "raw": None}
+
+    def _set_integer_setting(self, name: str, value: int) -> list:
+        spec = self.INTEGER_SETTINGS[name]
+        minimum = spec["min"]
+        maximum = spec["max"]
+        if value < minimum or value > maximum:
+            raise ValueError(f"{name.replace('_', ' ')} must be between {minimum} and {maximum} minutes")
+        return cloud_set_properties(
+            self.cloud,
+            self.did,
+            [{"siid": spec["siid"], "piid": spec["piid"], "value": value}],
             country=self.country,
         )
 
@@ -658,6 +687,12 @@ class CloudVacuumService:
 
     def set_smart_wash(self, enabled: bool) -> list:
         return self._set_boolean_setting("smart_wash", enabled)
+
+    def clean_rags_tip(self) -> dict[str, Any]:
+        return self._integer_setting("clean_rags_tip")
+
+    def set_clean_rags_tip(self, minutes: int) -> list:
+        return self._set_integer_setting("clean_rags_tip", minutes)
 
     def water_level(self) -> dict[str, Any]:
         """Read mop water flow setting from vacuum-extend service.

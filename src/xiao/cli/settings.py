@@ -1,4 +1,4 @@
-"""Device settings, fan speed, DND, volume, water level, and vacuum-extend toggles."""
+"""Device settings, fan speed, DND, volume, water level, and vacuum-extend controls."""
 
 from __future__ import annotations
 
@@ -40,6 +40,29 @@ def _render_toggle_setting(label: str, getter_name: str, setter_name: str, toggl
         raw = data.get("raw")
         raw_suffix = f" (raw: {raw})" if raw is not None else ""
         rprint(f"[cyan]{label}:[/cyan] {state}{raw_suffix}")
+    except (AttributeError, Exception) as e:
+        rprint(f"[yellow]{label} not available: {e}[/yellow]")
+
+
+def _render_minutes_setting(label: str, getter_name: str, setter_name: str, minutes: int | None) -> None:
+    vac = _vacuum()
+    if minutes is not None:
+        try:
+            getattr(vac, setter_name)(minutes)
+            rprint(f"[green]{label} set to {minutes} min.[/green]")
+        except (AttributeError, ValueError) as e:
+            rprint(f"[red]{e}[/red]")
+        return
+
+    try:
+        data = getattr(vac, getter_name)()
+        current = data.get("minutes")
+        raw = data.get("raw")
+        if current is None:
+            rprint(f"[yellow]{label} not available.[/yellow]")
+            return
+        raw_suffix = f" (raw: {raw})" if raw is not None else ""
+        rprint(f"[cyan]{label}:[/cyan] {current} min{raw_suffix}")
     except (AttributeError, Exception) as e:
         rprint(f"[yellow]{label} not available: {e}[/yellow]")
 
@@ -152,3 +175,11 @@ def smart_wash(
 ):
     """Get or set smart mop washing at the base station."""
     _render_toggle_setting("Smart wash", "smart_wash", "set_smart_wash", toggle)
+
+
+@app.command()
+def clean_rags_tip(
+    minutes: int | None = typer.Argument(None, help="Reminder interval in minutes (0-120)"),
+):
+    """Get or set the clean-rags reminder interval."""
+    _render_minutes_setting("Clean rags tip", "clean_rags_tip", "set_clean_rags_tip", minutes)
