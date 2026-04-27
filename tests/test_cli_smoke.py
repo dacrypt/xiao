@@ -246,6 +246,27 @@ class TestCLISettings:
         assert result.exit_code == 0
         mock_vacuum.set_smart_wash.assert_called_once_with(False)
 
+    def test_clean_rags_tip_get(self, mock_vacuum):
+        from xiao.cli.app import app
+
+        mock_vacuum.clean_rags_tip.return_value = {"minutes": 45, "raw": 45}
+
+        with patch("xiao.cli.app._vacuum", return_value=mock_vacuum):
+            result = runner.invoke(app, ["settings", "clean-rags-tip"])
+
+        assert result.exit_code == 0
+        assert "Clean rags tip" in result.stdout
+        assert "45 min" in result.stdout
+
+    def test_clean_rags_tip_set(self, mock_vacuum):
+        from xiao.cli.app import app
+
+        with patch("xiao.cli.app._vacuum", return_value=mock_vacuum):
+            result = runner.invoke(app, ["settings", "clean-rags-tip", "30"])
+
+        assert result.exit_code == 0
+        mock_vacuum.set_clean_rags_tip.assert_called_once_with(30)
+
 
 class TestCLIDevice:
     def test_device_info(self, mock_vacuum):
