@@ -217,11 +217,14 @@ def create_app() -> FastAPI:
             fan = vac.fan_speed()
             water = {}
             smart_wash = {}
+            carpet_avoidance = {}
             clean_rags_tip = {}
             with contextlib.suppress(Exception):
                 water = vac.water_level()
             with contextlib.suppress(Exception):
                 smart_wash = vac.smart_wash()
+            with contextlib.suppress(Exception):
+                carpet_avoidance = vac.carpet_avoidance()
             with contextlib.suppress(Exception):
                 clean_rags_tip = vac.clean_rags_tip()
             return {
@@ -230,6 +233,7 @@ def create_app() -> FastAPI:
                 "fan_speed": fan,
                 "water": water,
                 "smart_wash": smart_wash,
+                "carpet_avoidance": carpet_avoidance,
                 "clean_rags_tip": clean_rags_tip,
             }
         except Exception as e:

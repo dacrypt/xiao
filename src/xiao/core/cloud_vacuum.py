@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import json
 import logging
-from typing import Any
+from typing import Any, cast
 
 from xiao.core.cloud import (
     XiaomiCloud,
@@ -38,7 +38,7 @@ def _format_schedule_days(days: list[str]) -> str:
 # siid 3: battery (battery-level, charging-state)
 # siid 4: vacuum-extend (Xiaomi-specific: work-mode, cleaning-time, cleaning-area, cleaning-mode,
 #           mop-mode/water-level WRITABLE, waterbox-status, task-status, clean-extend-data write-only,
-#           break-point-restart, carpet-press, child-lock, clean-rags-tip, ...)
+#           break-point-restart, carpet-press, child-lock, clean-rags-tip, carpet-excape, ...)
 # siid 5: do-not-disturb (enable, start-time, end-time)
 # siid 7: audio (volume, voice-packet, voice-info)
 # siid 8: timezone/schedule (timezone, schedules, ?, ?)
@@ -88,6 +88,7 @@ MIOT_SPEC = {
     "carpet_press": {"siid": 4, "piid": 12},  # Carpet boost (0=Off, 1=On) — writable
     "child_lock": {"siid": 4, "piid": 27},  # Child lock (0=Off, 1=On) — writable
     "clean_rags_tip": {"siid": 4, "piid": 16},  # Mop wash reminder interval (minutes, 0-120) — writable
+    "carpet_escape": {"siid": 4, "piid": 36},  # Carpet avoidance mode (1=Escape, 2=Auto) — cloud-backed
     "clean_extend_data": {"siid": 4, "piid": 10},  # Room/zone clean params (write-only string JSON)
 }
 
@@ -615,6 +616,14 @@ class CloudVacuumService:
     INTEGER_SETTINGS = {
         "clean_rags_tip": {"siid": 4, "piid": 16, "min": 0, "max": 120},
     }
+    ENUM_SETTINGS = {
+        "carpet_avoidance": {
+            "siid": 4,
+            "piid": 36,
+            "values": {1: "avoid", 2: "auto"},
+            "aliases": {"escape": "avoid"},
+        },
+    }
 
     def _boolean_setting(self, name: str) -> dict[str, Any]:
         spec = self.BOOLEAN_SETTINGS[name]
@@ -664,6 +673,38 @@ class CloudVacuumService:
             country=self.country,
         )
 
+    def _enum_setting(self, name: str) -> dict[str, Any]:
+        spec = self.ENUM_SETTINGS[name]
+        values = cast("dict[int, str]", spec["values"])
+        results = cloud_get_properties(
+            self.cloud,
+            self.did,
+            [{"siid": spec["siid"], "piid": spec["piid"]}],
+            country=self.country,
+        )
+        if results and results[0].get("code", 0) == 0:
+            raw = results[0].get("value")
+            return {"mode": values.get(raw), "raw": raw}
+        return {"mode": None, "raw": None}
+
+    def _set_enum_setting(self, name: str, value: str) -> list:
+        spec = self.ENUM_SETTINGS[name]
+        values = cast("dict[int, str]", spec["values"])
+        aliases = cast("dict[str, str]", spec.get("aliases", {}))
+        normalized = value.strip().lower()
+        normalized = aliases.get(normalized, normalized)
+        reverse_values = {label: raw for raw, label in values.items()}
+        raw_value = reverse_values.get(normalized)
+        if raw_value is None:
+            allowed = ", ".join(reverse_values)
+            raise ValueError(f"{name.replace('_', ' ')} must be one of: {allowed}")
+        return cloud_set_properties(
+            self.cloud,
+            self.did,
+            [{"siid": spec["siid"], "piid": spec["piid"], "value": raw_value}],
+            country=self.country,
+        )
+
     def resume_after_charge(self) -> dict[str, Any]:
         return self._boolean_setting("resume_after_charge")
 
@@ -687,6 +728,12 @@ class CloudVacuumService:
 
     def set_smart_wash(self, enabled: bool) -> list:
         return self._set_boolean_setting("smart_wash", enabled)
+
+    def carpet_avoidance(self) -> dict[str, Any]:
+        return self._enum_setting("carpet_avoidance")
+
+    def set_carpet_avoidance(self, mode: str) -> list:
+        return self._set_enum_setting("carpet_avoidance", mode)
 
     def clean_rags_tip(self) -> dict[str, Any]:
         return self._integer_setting("clean_rags_tip")

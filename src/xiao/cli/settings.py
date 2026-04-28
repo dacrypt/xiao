@@ -67,6 +67,29 @@ def _render_minutes_setting(label: str, getter_name: str, setter_name: str, minu
         rprint(f"[yellow]{label} not available: {e}[/yellow]")
 
 
+def _render_mode_setting(label: str, getter_name: str, setter_name: str, mode: str | None) -> None:
+    vac = _vacuum()
+    if mode is not None:
+        try:
+            getattr(vac, setter_name)(mode)
+            rprint(f"[green]{label} set to {mode.title()}.[/green]")
+        except (AttributeError, ValueError) as e:
+            rprint(f"[red]{e}[/red]")
+        return
+
+    try:
+        data = getattr(vac, getter_name)()
+        current = data.get("mode")
+        raw = data.get("raw")
+        if current is None:
+            rprint(f"[yellow]{label} not available.[/yellow]")
+            return
+        raw_suffix = f" (raw: {raw})" if raw is not None else ""
+        rprint(f"[cyan]{label}:[/cyan] {current.title()}{raw_suffix}")
+    except (AttributeError, Exception) as e:
+        rprint(f"[yellow]{label} not available: {e}[/yellow]")
+
+
 @app.command()
 def speed(
     preset: str | None = typer.Argument(None, help="Fan speed: silent, standard, medium, turbo"),
@@ -175,6 +198,14 @@ def smart_wash(
 ):
     """Get or set smart mop washing at the base station."""
     _render_toggle_setting("Smart wash", "smart_wash", "set_smart_wash", toggle)
+
+
+@app.command()
+def carpet_avoidance(
+    mode: str | None = typer.Argument(None, help="Mode: avoid/auto"),
+):
+    """Get or set carpet avoidance mode."""
+    _render_mode_setting("Carpet avoidance", "carpet_avoidance", "set_carpet_avoidance", mode)
 
 
 @app.command()
