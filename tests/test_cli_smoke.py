@@ -246,6 +246,27 @@ class TestCLISettings:
         assert result.exit_code == 0
         mock_vacuum.set_smart_wash.assert_called_once_with(False)
 
+    def test_carpet_avoidance_get(self, mock_vacuum):
+        from xiao.cli.app import app
+
+        mock_vacuum.carpet_avoidance.return_value = {"mode": "avoid", "raw": 1}
+
+        with patch("xiao.cli.app._vacuum", return_value=mock_vacuum):
+            result = runner.invoke(app, ["settings", "carpet-avoidance"])
+
+        assert result.exit_code == 0
+        assert "Carpet avoidance" in result.stdout
+        assert "Avoid" in result.stdout
+
+    def test_carpet_avoidance_set(self, mock_vacuum):
+        from xiao.cli.app import app
+
+        with patch("xiao.cli.app._vacuum", return_value=mock_vacuum):
+            result = runner.invoke(app, ["settings", "carpet-avoidance", "auto"])
+
+        assert result.exit_code == 0
+        mock_vacuum.set_carpet_avoidance.assert_called_once_with("auto")
+
     def test_clean_rags_tip_get(self, mock_vacuum):
         from xiao.cli.app import app
 

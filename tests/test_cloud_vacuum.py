@@ -445,6 +445,42 @@ class TestCloudVacuumAdvancedSettings:
         called_props = mock_set.call_args[0][2]
         assert called_props == [{"siid": 4, "piid": piid, "value": 1 if enabled else 0}]
 
+    @pytest.mark.parametrize(
+        ("raw_value", "mode"),
+        [
+            (1, "avoid"),
+            (2, "auto"),
+        ],
+    )
+    def test_carpet_avoidance_reads_enum_from_vacuum_extend(self, vacuum, raw_value, mode):
+        mock_results = [{"siid": 4, "piid": 36, "code": 0, "value": raw_value}]
+
+        with patch("xiao.core.cloud_vacuum.cloud_get_properties", return_value=mock_results) as mock_get:
+            data = vacuum.carpet_avoidance()
+
+        called_props = mock_get.call_args[0][2]
+        assert called_props == [{"siid": 4, "piid": 36}]
+        assert data == {"mode": mode, "raw": raw_value}
+
+    @pytest.mark.parametrize(
+        ("mode", "raw_value"),
+        [
+            ("avoid", 1),
+            ("escape", 1),
+            ("auto", 2),
+        ],
+    )
+    def test_carpet_avoidance_writes_enum_to_vacuum_extend(self, vacuum, mode, raw_value):
+        with patch("xiao.core.cloud_vacuum.cloud_set_properties", return_value=[{"code": 0}]) as mock_set:
+            vacuum.set_carpet_avoidance(mode)
+
+        called_props = mock_set.call_args[0][2]
+        assert called_props == [{"siid": 4, "piid": 36, "value": raw_value}]
+
+    def test_carpet_avoidance_rejects_unknown_mode(self, vacuum):
+        with pytest.raises(ValueError, match="avoid, auto"):
+            vacuum.set_carpet_avoidance("smart")
+
     def test_clean_rags_tip_reads_minutes_from_vacuum_extend(self, vacuum):
         mock_results = [{"siid": 4, "piid": 16, "code": 0, "value": 45}]
 

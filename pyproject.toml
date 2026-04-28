@@ -1,6 +1,6 @@
 [project]
 name = "xiao-cli"
-version = "0.5.2"
+version = "0.5.3"
 description = "CLI tool and web dashboard to control Xiaomi/Roborock robot vacuums via cloud API"
 readme = "README.md"
 license = { file = "LICENSE" }
@@ -68,6 +68,7 @@ dev = [
     "ruff>=0.8.0",
     "mypy>=1.13.0",
     "types-requests>=2.32.0",
+    "httpx>=0.28.1",
 ]
 
 [tool.ruff]
