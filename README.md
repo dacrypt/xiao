@@ -38,7 +38,7 @@ CLI + web dashboard to control a **Xiaomi Robot Vacuum X20+** (model: `xiaomi.va
 - Settings — fan speed, water level, volume, Do-Not-Disturb window.
 - Consumable tracking with remaining life %.
 - Schedule viewer with parsed room / day / setting data.
-- **Mission Control** — glassmorphism web dashboard with real-time status and a saved dark/light theme toggle.
+- **Mission Control** — glassmorphism web dashboard with real-time status, advanced X20+ settings controls, and a saved dark/light theme toggle.
 - Auto token refresh via a persistent Chromium session (no repeated email 2FA).
 - Full MIoT property/action support for `c102gl`.
 
@@ -401,7 +401,7 @@ Glassmorphism + neon sci-fi dashboard:
 - Room selector with fan / water presets.
 - Base-station controls with status badges.
 - Consumable health bars (color-coded, days-until-replacement).
-- Cleaning history stats, schedule table, settings panel.
+- Cleaning history stats, schedule table, and a settings panel that now covers advanced X20+ `vacuum-extend` controls.
 - Keyboard: `S`=start, `X`=stop, `D`=dock, `F`=find, `R`=refresh.
 - Dark/light theme toggle with saved browser preference.
 - Mobile-first responsive, auto-refresh every 10s.
@@ -417,7 +417,13 @@ All endpoints at `http://localhost:8120/api/` — use these for **programmatic /
 | `/consumables` | GET | Brush / filter health |
 | `/rooms` | GET | Room list |
 | `/schedules` | GET | Parsed schedules |
-| `/settings` | GET | DND, volume, fan, water, smart-wash, carpet-avoidance, clean-rags-tip snapshot |
+| `/settings` | GET | DND, volume, fan, water, resume-after-charge, carpet-boost, child-lock, smart-wash, carpet-avoidance, clean-rags-tip snapshot |
+| `/settings/resume-after-charge` | POST | `{enabled}` toggle auto-resume after charging |
+| `/settings/carpet-boost` | POST | `{enabled}` toggle carpet suction boost |
+| `/settings/child-lock` | POST | `{enabled}` toggle hardware button lock |
+| `/settings/smart-wash` | POST | `{enabled}` toggle smart mop washing |
+| `/settings/carpet-avoidance` | POST | `{mode}` where mode is `avoid` or `auto` |
+| `/settings/clean-rags-tip` | POST | `{minutes}` where minutes is `0-120` |
 | `/start` | POST | Start clean |
 | `/stop` | POST | Stop |
 | `/dock` | POST | Return to dock |

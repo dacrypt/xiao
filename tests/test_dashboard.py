@@ -48,3 +48,21 @@ class TestDashboardDryTimeCopy:
         assert "Dry Time Left" in html
         assert "d.sweep_type" not in html
         assert "Sweep Type / Dry Time" not in html
+
+
+class TestDashboardAdvancedSettings:
+    def test_dashboard_exposes_advanced_setting_controls_and_api_hooks(self):
+        html = _dashboard_html()
+
+        assert 'id="resumeAfterChargeToggle"' in html
+        assert 'id="carpetBoostToggle"' in html
+        assert 'id="childLockToggle"' in html
+        assert 'id="smartWashToggle"' in html
+        assert 'id="carpetAvoidanceBtns"' in html
+        assert 'id="cleanRagsTipSlider"' in html
+        assert "/api/settings/resume-after-charge" in html
+        assert "/api/settings/carpet-boost" in html
+        assert "/api/settings/child-lock" in html
+        assert "/api/settings/smart-wash" in html
+        assert "/api/settings/carpet-avoidance" in html
+        assert "/api/settings/clean-rags-tip" in html

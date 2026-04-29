@@ -31,6 +31,18 @@ class DNDRequest(BaseModel):
     end: str | None = None  # "HH:MM"
 
 
+class ToggleSettingRequest(BaseModel):
+    enabled: bool
+
+
+class ModeSettingRequest(BaseModel):
+    mode: str
+
+
+class MinutesSettingRequest(BaseModel):
+    minutes: int
+
+
 class WaterRequest(BaseModel):
     level: str  # low, medium, high
 
@@ -216,11 +228,20 @@ def create_app() -> FastAPI:
             vol = vac.volume()
             fan = vac.fan_speed()
             water = {}
+            resume_after_charge = {}
+            carpet_boost = {}
+            child_lock = {}
             smart_wash = {}
             carpet_avoidance = {}
             clean_rags_tip = {}
             with contextlib.suppress(Exception):
                 water = vac.water_level()
+            with contextlib.suppress(Exception):
+                resume_after_charge = vac.resume_after_charge()
+            with contextlib.suppress(Exception):
+                carpet_boost = vac.carpet_boost()
+            with contextlib.suppress(Exception):
+                child_lock = vac.child_lock()
             with contextlib.suppress(Exception):
                 smart_wash = vac.smart_wash()
             with contextlib.suppress(Exception):
@@ -232,6 +253,9 @@ def create_app() -> FastAPI:
                 "volume": vol,
                 "fan_speed": fan,
                 "water": water,
+                "resume_after_charge": resume_after_charge,
+                "carpet_boost": carpet_boost,
+                "child_lock": child_lock,
                 "smart_wash": smart_wash,
                 "carpet_avoidance": carpet_avoidance,
                 "clean_rags_tip": clean_rags_tip,
@@ -477,6 +501,74 @@ def create_app() -> FastAPI:
             return {"ok": True, "enabled": req.enabled, "result": result}
         except Exception as e:
             logger.exception("set DND failed")
+            raise HTTPException(500, detail=str(e)) from e
+
+    @app.post("/api/settings/resume-after-charge")
+    async def set_resume_after_charge(req: ToggleSettingRequest):
+        try:
+            vac = _get_vacuum()
+            result = vac.set_resume_after_charge(req.enabled)
+            return {"ok": True, "enabled": req.enabled, "result": result}
+        except Exception as e:
+            logger.exception("set resume after charge failed")
+            raise HTTPException(500, detail=str(e)) from e
+
+    @app.post("/api/settings/carpet-boost")
+    async def set_carpet_boost(req: ToggleSettingRequest):
+        try:
+            vac = _get_vacuum()
+            result = vac.set_carpet_boost(req.enabled)
+            return {"ok": True, "enabled": req.enabled, "result": result}
+        except Exception as e:
+            logger.exception("set carpet boost failed")
+            raise HTTPException(500, detail=str(e)) from e
+
+    @app.post("/api/settings/child-lock")
+    async def set_child_lock(req: ToggleSettingRequest):
+        try:
+            vac = _get_vacuum()
+            result = vac.set_child_lock(req.enabled)
+            return {"ok": True, "enabled": req.enabled, "result": result}
+        except Exception as e:
+            logger.exception("set child lock failed")
+            raise HTTPException(500, detail=str(e)) from e
+
+    @app.post("/api/settings/smart-wash")
+    async def set_smart_wash(req: ToggleSettingRequest):
+        try:
+            vac = _get_vacuum()
+            result = vac.set_smart_wash(req.enabled)
+            return {"ok": True, "enabled": req.enabled, "result": result}
+        except Exception as e:
+            logger.exception("set smart wash failed")
+            raise HTTPException(500, detail=str(e)) from e
+
+    @app.post("/api/settings/carpet-avoidance")
+    async def set_carpet_avoidance(req: ModeSettingRequest):
+        try:
+            vac = _get_vacuum()
+            result = vac.set_carpet_avoidance(req.mode)
+            return {"ok": True, "mode": req.mode, "result": result}
+        except ValueError as e:
+            raise HTTPException(400, detail=str(e)) from e
+        except Exception as e:
+            logger.exception("set carpet avoidance failed")
+            raise HTTPException(500, detail=str(e)) from e
+
+    @app.post("/api/settings/clean-rags-tip")
+    async def set_clean_rags_tip(req: MinutesSettingRequest):
+        try:
+            if not (0 <= req.minutes <= 120):
+                raise HTTPException(400, detail="clean rags tip must be between 0 and 120 minutes")
+            vac = _get_vacuum()
+            result = vac.set_clean_rags_tip(req.minutes)
+            return {"ok": True, "minutes": req.minutes, "result": result}
+        except HTTPException:
+            raise
+        except ValueError as e:
+            raise HTTPException(400, detail=str(e)) from e
+        except Exception as e:
+            logger.exception("set clean rags tip failed")
             raise HTTPException(500, detail=str(e)) from e
 
     # ── Water Tank Level Estimation ─────────────────────────────

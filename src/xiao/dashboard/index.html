@@ -789,6 +789,10 @@ header {
   letter-spacing: 1px;
   font-weight: 700;
 }
+.setting-label-wide {
+  width: 96px;
+  line-height: 1.15;
+}
 .speed-btns { display: flex; gap: 4px; flex: 1; }
 .speed-btn {
   flex: 1;
@@ -889,6 +893,34 @@ input[type=range]::-webkit-slider-thumb:hover {
   font-size: 0.75rem;
   padding: 5px 8px;
   width: 70px;
+}
+.setting-subtitle {
+  margin: 18px 0 10px;
+  font-size: 0.63rem;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  letter-spacing: 1.4px;
+  font-weight: 800;
+}
+.toggle-wrap {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.setting-hint {
+  font-size: 0.72rem;
+  color: var(--text-dim);
+  font-weight: 600;
+}
+.advanced-slider {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.advanced-slider .slider-val {
+  width: 56px;
 }
 
 /* ── Schedules ─────────────────────────────────────────────── */
@@ -1708,6 +1740,49 @@ input[type=range]::-webkit-slider-thumb:hover {
         </div>
       </div>
     </div>
+    <div class="setting-subtitle">Advanced X20+ vacuum-extend</div>
+    <div class="setting-row">
+      <span class="setting-label setting-label-wide">Resume Charge</span>
+      <div class="toggle-wrap">
+        <div class="toggle" id="resumeAfterChargeToggle" onclick="toggleResumeAfterCharge()"></div>
+        <span class="setting-hint" id="resumeAfterChargeLabel">--</span>
+      </div>
+    </div>
+    <div class="setting-row">
+      <span class="setting-label setting-label-wide">Carpet Boost</span>
+      <div class="toggle-wrap">
+        <div class="toggle" id="carpetBoostToggle" onclick="toggleCarpetBoost()"></div>
+        <span class="setting-hint" id="carpetBoostLabel">--</span>
+      </div>
+    </div>
+    <div class="setting-row">
+      <span class="setting-label setting-label-wide">Child Lock</span>
+      <div class="toggle-wrap">
+        <div class="toggle" id="childLockToggle" onclick="toggleChildLock()"></div>
+        <span class="setting-hint" id="childLockLabel">--</span>
+      </div>
+    </div>
+    <div class="setting-row">
+      <span class="setting-label setting-label-wide">Smart Wash</span>
+      <div class="toggle-wrap">
+        <div class="toggle" id="smartWashToggle" onclick="toggleSmartWash()"></div>
+        <span class="setting-hint" id="smartWashLabel">--</span>
+      </div>
+    </div>
+    <div class="setting-row">
+      <span class="setting-label setting-label-wide">Carpet Mode</span>
+      <div class="speed-btns" id="carpetAvoidanceBtns">
+        <button class="speed-btn" data-mode="avoid" onclick="setCarpetAvoidance('avoid')">Avoid</button>
+        <button class="speed-btn" data-mode="auto" onclick="setCarpetAvoidance('auto')">Auto</button>
+      </div>
+    </div>
+    <div class="setting-row">
+      <span class="setting-label setting-label-wide">Rags Tip</span>
+      <div class="advanced-slider">
+        <input type="range" min="0" max="120" step="1" value="0" id="cleanRagsTipSlider" oninput="onCleanRagsTipInput(this.value)" onchange="saveCleanRagsTip(this.value)">
+        <span class="slider-val" id="cleanRagsTipVal">--</span>
+      </div>
+    </div>
   </div>
 
   <!-- ═══ ROW 5: History ═══ -->
@@ -1803,6 +1878,8 @@ let roomCleanWater = 'low';
 let isDrying = false;
 let lastVol = 50;
 let isMuted = false;
+let cleanRagsTipTimeout = null;
+let currentCarpetAvoidance = '';
 let retryDelay = 1000;
 let maxRetry = 30000;
 let statusPollInterval = 10000;
@@ -2261,9 +2338,24 @@ async function refreshSettings() {
     if (currentFanLevel >= 0) highlightSpeed(currentFanLevel);
     // Water
     const water = d.water || {};
-    if (water.level) {
-      currentWaterLevel = water.level.toLowerCase();
+    const waterLevel = water.level || water.water_level;
+    if (waterLevel) {
+      currentWaterLevel = waterLevel.toLowerCase();
       highlightWater(currentWaterLevel);
+    }
+    // Advanced settings
+    updateToggleSetting('resumeAfterChargeToggle', 'resumeAfterChargeLabel', !!d.resume_after_charge?.enabled);
+    updateToggleSetting('carpetBoostToggle', 'carpetBoostLabel', !!d.carpet_boost?.enabled);
+    updateToggleSetting('childLockToggle', 'childLockLabel', !!d.child_lock?.enabled);
+    updateToggleSetting('smartWashToggle', 'smartWashLabel', !!d.smart_wash?.enabled);
+    if (d.carpet_avoidance?.mode) {
+      currentCarpetAvoidance = d.carpet_avoidance.mode;
+      highlightCarpetAvoidance(currentCarpetAvoidance);
+    }
+    if (typeof d.clean_rags_tip?.minutes === 'number') {
+      const minutes = d.clean_rags_tip.minutes;
+      document.getElementById('cleanRagsTipSlider').value = minutes;
+      document.getElementById('cleanRagsTipVal').textContent = `${minutes} min`;
     }
   } catch (e) { /* ignore */ }
 }
@@ -2574,6 +2666,67 @@ async function toggleDND() {
     toggle.classList.toggle('on', on);
     toast('DND ' + (on ? 'enabled' : 'disabled'));
   } catch (e) { toast('Error: ' + e.message, 'err'); }
+}
+
+function updateToggleSetting(toggleId, labelId, enabled) {
+  document.getElementById(toggleId).classList.toggle('on', enabled);
+  document.getElementById(labelId).textContent = enabled ? 'On' : 'Off';
+}
+
+async function postToggleSetting(path, toggleId, labelId, title) {
+  const enabled = !document.getElementById(toggleId).classList.contains('on');
+  try {
+    await api(path, { method: 'POST', body: JSON.stringify({ enabled }) });
+    updateToggleSetting(toggleId, labelId, enabled);
+    toast(`${title}: ${enabled ? 'On' : 'Off'}`);
+  } catch (e) { toast('Error: ' + e.message, 'err'); }
+}
+
+function toggleResumeAfterCharge() {
+  return postToggleSetting('/api/settings/resume-after-charge', 'resumeAfterChargeToggle', 'resumeAfterChargeLabel', 'Resume after charge');
+}
+
+function toggleCarpetBoost() {
+  return postToggleSetting('/api/settings/carpet-boost', 'carpetBoostToggle', 'carpetBoostLabel', 'Carpet boost');
+}
+
+function toggleChildLock() {
+  return postToggleSetting('/api/settings/child-lock', 'childLockToggle', 'childLockLabel', 'Child lock');
+}
+
+function toggleSmartWash() {
+  return postToggleSetting('/api/settings/smart-wash', 'smartWashToggle', 'smartWashLabel', 'Smart wash');
+}
+
+function highlightCarpetAvoidance(mode) {
+  document.querySelectorAll('#carpetAvoidanceBtns .speed-btn').forEach(b => {
+    b.classList.toggle('active', b.dataset.mode === mode);
+  });
+}
+
+async function setCarpetAvoidance(mode) {
+  try {
+    await api('/api/settings/carpet-avoidance', { method: 'POST', body: JSON.stringify({ mode }) });
+    currentCarpetAvoidance = mode;
+    highlightCarpetAvoidance(mode);
+    toast('Carpet mode: ' + (mode === 'avoid' ? 'Avoid' : 'Auto'));
+  } catch (e) { toast('Error: ' + e.message, 'err'); }
+}
+
+function onCleanRagsTipInput(val) {
+  document.getElementById('cleanRagsTipVal').textContent = `${val} min`;
+}
+
+function saveCleanRagsTip(val) {
+  clearTimeout(cleanRagsTipTimeout);
+  cleanRagsTipTimeout = setTimeout(async () => {
+    try {
+      const minutes = parseInt(val, 10);
+      await api('/api/settings/clean-rags-tip', { method: 'POST', body: JSON.stringify({ minutes }) });
+      document.getElementById('cleanRagsTipVal').textContent = `${minutes} min`;
+      toast(`Clean rags tip: ${minutes} min`);
+    } catch (e) { toast('Error: ' + e.message, 'err'); }
+  }, 150);
 }
 
 // ── Manual refresh ─────────────────────────────────────────
