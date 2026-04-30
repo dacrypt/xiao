@@ -903,10 +903,10 @@ class CloudVacuumService:
             data["consumables"] = cons
         except Exception:
             pass
-        # Add last clean
+        # Add clean-log history
         try:
-            last = self.last_clean()
-            data["last_clean"] = last
+            history = self.clean_history()
+            data["history"] = history
         except Exception:
             pass
         # Add schedules count

@@ -304,6 +304,27 @@ class TestCLIDevice:
             result = runner.invoke(app, ["device", "history"])
         assert result.exit_code == 0
 
+    def test_device_history_full_keeps_first_clean_labels_for_cloud_history(self, mock_vacuum):
+        from xiao.cli.app import app
+
+        mock_vacuum.clean_history.return_value = {
+            "first_clean_date": "2024-03-21 05:46 UTC",
+            "total_clean_count": 42,
+            "total_clean_duration": 130,
+        }
+        mock_vacuum.last_clean.return_value = {
+            "first_clean_date": "2024-03-21 05:46 UTC",
+            "total_clean_count": 42,
+            "total_clean_duration": 130,
+        }
+
+        with patch("xiao.cli.app._vacuum", return_value=mock_vacuum):
+            result = runner.invoke(app, ["device", "history", "--full"])
+
+        assert result.exit_code == 0
+        assert "First Clean Date" in result.stdout
+        assert "Last First Clean Date" not in result.stdout
+
 
 class TestCLIMap:
     def test_map_rooms(self, mock_vacuum):

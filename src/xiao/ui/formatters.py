@@ -170,17 +170,25 @@ def render_full_status(data: dict[str, Any]) -> None:
             rem = cons.get(f"{key}_remaining", "—")
             lines.append(f"    {label}: {_consumable_bar(rem)}")
 
-    # Last clean
-    last = data.get("last_clean", {})
-    if last:
+    # Cleaning history
+    history = data.get("history") or data.get("last_clean", {})
+    if history:
         lines.append("")
-        lines.append("  [bold underline]Last Clean[/bold underline]")
-        if last.get("last_clean_date"):
-            lines.append(f"    Date:     {last['last_clean_date']}")
-        if last.get("last_clean_area") is not None:
-            lines.append(f"    Area:     {_format_area(last['last_clean_area'])}")
-        if last.get("last_clean_duration") is not None:
-            lines.append(f"    Duration: {_format_time(last['last_clean_duration'])}")
+        lines.append("  [bold underline]Cleaning History[/bold underline]")
+        if history.get("last_clean_date"):
+            lines.append(f"    Recent Clean: {history['last_clean_date']}")
+        elif history.get("first_clean_date"):
+            lines.append(f"    First Clean:  {history['first_clean_date']}")
+        if history.get("total_clean_count") is not None:
+            lines.append(f"    Total Cleans: {history['total_clean_count']}")
+        if history.get("total_clean_duration") is not None:
+            lines.append(f"    Total Time:   {_format_time(history['total_clean_duration'])}")
+        if history.get("total_area") is not None:
+            lines.append(f"    Total Area:   {_format_area(history['total_area'])}")
+        if history.get("last_clean_area") is not None:
+            lines.append(f"    Recent Area:  {_format_area(history['last_clean_area'])}")
+        if history.get("last_clean_duration") is not None:
+            lines.append(f"    Recent Time:  {_format_time(history['last_clean_duration'])}")
 
     content = "\n".join(lines)
     console.print(Panel(content, title="◈ Full Status — Xiaomi X20+", border_style="cyan"))
@@ -271,14 +279,17 @@ def render_report(sections: dict[str, Any]) -> None:
             lines.append(f"  Total Cleans:   {hist['total_clean_count']}")
         if hist.get("total_clean_duration") is not None:
             lines.append(f"  Total Time:     {_format_time(hist['total_clean_duration'])}")
-        if hist.get("total_clean_area") is not None:
-            lines.append(f"  Total Area:     {_format_area(hist['total_clean_area'])}")
+        total_area = hist.get("total_area", hist.get("total_clean_area"))
+        if total_area is not None:
+            lines.append(f"  Total Area:     {_format_area(total_area)}")
         if hist.get("last_clean_date"):
-            lines.append(f"  Last Clean:     {hist['last_clean_date']}")
+            lines.append(f"  Recent Clean:   {hist['last_clean_date']}")
+        elif hist.get("first_clean_date"):
+            lines.append(f"  First Clean:    {hist['first_clean_date']}")
         if hist.get("last_clean_area") is not None:
-            lines.append(f"  Last Area:      {_format_area(hist['last_clean_area'])}")
+            lines.append(f"  Recent Area:    {_format_area(hist['last_clean_area'])}")
         if hist.get("last_clean_duration") is not None:
-            lines.append(f"  Last Duration:  {_format_time(hist['last_clean_duration'])}")
+            lines.append(f"  Recent Duration:{_format_time(hist['last_clean_duration'])}")
 
         if lines:
             console.print(Panel("\n".join(lines), title="📊 Cleaning History", border_style="green"))
