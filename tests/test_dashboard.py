@@ -66,3 +66,13 @@ class TestDashboardAdvancedSettings:
         assert "/api/settings/smart-wash" in html
         assert "/api/settings/carpet-avoidance" in html
         assert "/api/settings/clean-rags-tip" in html
+
+
+class TestDashboardHistoryCopy:
+    def test_dashboard_history_uses_clean_log_totals_instead_of_stale_last_clean_fields(self):
+        html = _dashboard_html()
+
+        assert "label: 'First Clean'" in html
+        assert "d.first_clean_date || '--'" in html
+        assert "label: 'Last Clean'" not in html
+        assert "d.last_clean_date || '--'" not in html

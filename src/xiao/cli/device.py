@@ -33,11 +33,17 @@ def history(
     data = vac.clean_history()
 
     if full:
-        # Add last clean details
+        # Add any extra history details without mangling clean-log aggregate keys.
         try:
             last = vac.last_clean()
             if last:
-                data.update({f"last_{k}" if not k.startswith("last_") else k: v for k, v in last.items()})
+                merged = {}
+                for key, value in last.items():
+                    if key.startswith(("last_", "first_", "total_")):
+                        merged[key] = value
+                    else:
+                        merged[f"last_{key}"] = value
+                data.update(merged)
         except Exception:
             pass
         # Add consumable info

@@ -2391,10 +2391,15 @@ async function refreshHistory() {
       { val: fmt(d.total_area ?? d.total_area_all), unit: 'm²', label: 'Total Area' },
       { val: fmt(d.total_clean_count ?? d.total_count), unit: '', label: 'Total Cleans' },
       { val: d.total_clean_duration_display || (d.total_clean_duration != null ? d.total_clean_duration + 'min' : '--'), unit: '', label: 'Total Time' },
-      { val: d.last_clean_date || '--', unit: '', label: 'Last Clean' },
-      { val: fmt(d.last_clean_area ?? d.last_area), unit: 'm²', label: 'Last Area' },
-      { val: d.last_clean_duration != null ? Math.round(d.last_clean_duration) + 'min' : '--', unit: '', label: 'Last Duration' },
+      { val: d.first_clean_date || '--', unit: '', label: 'First Clean' },
     ];
+
+    if (d.last_clean_area != null || d.last_area != null) {
+      stats.push({ val: fmt(d.last_clean_area ?? d.last_area), unit: 'm²', label: 'Recent Area' });
+    }
+    if (d.last_clean_duration != null) {
+      stats.push({ val: Math.round(d.last_clean_duration) + 'min', unit: '', label: 'Recent Duration' });
+    }
     area.innerHTML = stats.map(s =>
       `<div class="hist-stat"><div class="hist-val">${s.val}${s.unit && s.val !== '--' ? '<small> ' + s.unit + '</small>' : ''}</div><div class="hist-label">${s.label}</div></div>`
     ).join('');

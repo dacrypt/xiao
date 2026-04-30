@@ -19,3 +19,32 @@ class TestRenderStatus:
         rendered = output.getvalue()
         assert "Dry Left:" in rendered
         assert "47m" in rendered
+
+
+class TestRenderFullStatus:
+    def test_render_full_status_uses_first_clean_and_totals_for_cloud_history(self, monkeypatch):
+        output = StringIO()
+        monkeypatch.setattr(
+            formatters, "console", Console(file=output, force_terminal=False, color_system=None, width=120)
+        )
+
+        formatters.render_full_status(
+            {
+                "state": "Charging Completed",
+                "last_clean": {
+                    "first_clean_date": "2024-03-21 05:46 UTC",
+                    "total_clean_count": 42,
+                    "total_clean_duration": 130,
+                },
+            }
+        )
+
+        rendered = output.getvalue()
+        assert "Cleaning History" in rendered
+        assert "First Clean:" in rendered
+        assert "2024-03-21 05:46 UTC" in rendered
+        assert "Total Cleans:" in rendered
+        assert "42" in rendered
+        assert "Total Time:" in rendered
+        assert "2h 10m" in rendered
+        assert "Last Clean" not in rendered
