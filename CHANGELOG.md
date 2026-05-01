@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.2](https://github.com/dacrypt/xiao/compare/v0.6.1...v0.6.2) (2026-05-01)
+
+### Fixed
+
+* **room-cleaning:** stop treating X20+ room-clean `code=0` accepts as guaranteed movement by verifying follow-up status across CLI, Mission Control, and MCP, surfacing a warning when the robot still looks docked/charging, and emitting exit code `80` for the CLI's clearly unresponsive case
+
 ## [0.6.1](https://github.com/dacrypt/xiao/compare/v0.6.0...v0.6.1) (2026-04-30)
 
 ### Fixed

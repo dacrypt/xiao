@@ -144,11 +144,10 @@ See README.md "REST API" for endpoint list.
 | `77` | Cloud auth / token refresh failed | Run `xiao cloud-login`, then retry |
 | `78` | (reserved) Chromium CDP on port 18800 unreachable | Launch Chromium with `--remote-debugging-port=18800` |
 | `79` | (reserved) State 21 / water-tank alert | Ask user to refill/empty tanks, then `xiao start` |
-| `80` | (reserved) Command accepted but vacuum didn't move | Fall back to `xiao start` |
+| `80` | Room-clean command accepted but the vacuum still looked docked/charging after verification | Re-check room IDs, then fall back to `xiao start` |
 
-Codes `78-80` are reserved for future detection and not yet emitted
-consistently — treat them as documentation of intent. For now, detect those
-conditions by inspecting `xiao status --json` output.
+Today only code `80` is emitted consistently. Codes `78-79` remain reserved;
+detect those conditions by inspecting `xiao status --json` output.
 
 ## Safety / guardrails
 

@@ -2557,8 +2557,12 @@ function cleanSelectedRooms() {
   const names = ids.map(id => { const r = roomsData.find(x => x.id === id); return r ? r.name : id; });
   showConfirm(`Clean ${names.join(', ')}?\nFan: ${roomCleanFan} | Water: ${roomCleanWater}`, async () => {
     try {
-      await api('/api/clean/rooms', { method: 'POST', body: JSON.stringify({ room_ids: ids, fan: roomCleanFan, water: roomCleanWater }) });
-      toast(`Cleaning ${names.join(', ')}`);
+      const response = await api('/api/clean/rooms', { method: 'POST', body: JSON.stringify({ room_ids: ids, fan: roomCleanFan, water: roomCleanWater }) });
+      if (response.warning) {
+        toast(response.warning, 'info');
+      } else {
+        toast(`Cleaning ${names.join(', ')}`);
+      }
       setTimeout(refreshStatus, 2000);
     } catch (e) { toast('Error: ' + e.message, 'err'); }
   });

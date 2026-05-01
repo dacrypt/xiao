@@ -33,6 +33,27 @@ class TestDashboardSettingsSnapshot:
         assert response.json()["carpet_avoidance"] == {"mode": "avoid", "raw": 1}
 
 
+class TestDashboardRoomCleaning:
+    def test_room_clean_endpoint_returns_warning_when_accept_succeeds_but_start_is_unverified(self):
+        mock_vacuum = MagicMock()
+        mock_vacuum.clean_rooms_miot.return_value = {"code": 0}
+        mock_vacuum.status.side_effect = [
+            {"state": "Charging Completed"},
+            {"state": "Charging Completed"},
+            {"state": "Charging Completed"},
+            {"state": "Charging Completed"},
+        ]
+
+        with patch("xiao.dashboard.server._get_vacuum", return_value=mock_vacuum):
+            client = TestClient(create_app())
+            response = client.post("/api/clean/rooms", json={"room_ids": [7]})
+
+        assert response.status_code == 200
+        assert response.json()["ok"] is True
+        assert response.json()["verified_started"] is False
+        assert "code=0" in response.json()["warning"]
+
+
 class TestDashboardSettingWrites:
     @pytest.mark.parametrize(
         ("path", "payload", "method_name", "expected_value"),
