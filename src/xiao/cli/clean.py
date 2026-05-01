@@ -6,6 +6,8 @@ import typer
 from rich import print as rprint
 
 from xiao.core.config import get_rooms, resolve_room
+from xiao.core.exit_codes import EXIT_VACUUM_UNRESPONSIVE
+from xiao.core.room_cleaning import start_room_clean
 
 app = typer.Typer(no_args_is_help=False)
 
@@ -63,12 +65,12 @@ def clean(
                 rprint(f"[red]{e}[/red]")
                 raise typer.Exit(1) from e
 
-        # Try MIoT room sweep first, fall back to cloud RPC
-        try:
-            vac.clean_rooms_miot(room_ids)
-        except (AttributeError, Exception):
-            vac.clean_rooms(room_ids, repeat=repeat)
+        clean_result = start_room_clean(vac, room_ids, repeat=repeat)
         rprint(f"[green]Cleaning rooms: {', '.join(room_names)} (x{repeat}).[/green]")
+        if clean_result["warning"]:
+            rprint(f"[yellow]{clean_result['warning']}[/yellow]")
+        if clean_result["accepted"] and clean_result["verified_started"] is False:
+            raise typer.Exit(EXIT_VACUUM_UNRESPONSIVE)
     elif zone:
         coords = [int(c) for c in zone.split(",")]
         if len(coords) != 4:

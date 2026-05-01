@@ -161,6 +161,30 @@ class TestExitCodes:
         assert exit_codes.EXIT_VACUUM_UNRESPONSIVE == 80
 
 
+class TestCLIRoomCleaning:
+    def test_clean_room_exits_80_when_command_is_accepted_but_robot_stays_docked(self, mock_vacuum):
+        from xiao.cli.app import app
+
+        mock_vacuum.clean_rooms_miot.return_value = {"code": 0}
+        mock_vacuum.status.side_effect = [
+            {"state": "Charging Completed"},
+            {"state": "Charging Completed"},
+            {"state": "Charging Completed"},
+            {"state": "Charging Completed"},
+        ]
+
+        with (
+            patch("xiao.cli.app._vacuum", return_value=mock_vacuum),
+            patch("xiao.core.config.resolve_room", return_value=7),
+            patch("xiao.core.config.get_rooms", return_value={"7": "Kitchen"}),
+        ):
+            result = runner.invoke(app, ["clean", "-r", "Kitchen"])
+
+        assert result.exit_code == 80
+        assert "accepted" in result.output.lower()
+        assert "xiao start" in result.output
+
+
 class TestCLISettings:
     def test_speed_get(self, mock_vacuum):
         from xiao.cli.app import app

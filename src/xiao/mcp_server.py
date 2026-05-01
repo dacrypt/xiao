@@ -24,6 +24,8 @@ from __future__ import annotations
 
 from typing import Any
 
+from xiao.core.room_cleaning import start_room_clean
+
 try:
     from mcp.server.fastmcp import FastMCP
 except ImportError as exc:  # pragma: no cover
@@ -102,11 +104,13 @@ def clean_room(room: str) -> dict:
 
     room_id = resolve_room(room)
     vac = _vac()
-    try:
-        result = vac.clean_rooms_miot([room_id])
-    except (AttributeError, Exception):
-        result = vac.clean_rooms([room_id])
-    return {"code": _extract_code(result)}
+    clean_result = start_room_clean(vac, [room_id])
+    return {
+        "code": clean_result["code"],
+        "verified_started": clean_result["verified_started"],
+        "warning": clean_result["warning"],
+        "transport": clean_result["transport"],
+    }
 
 
 @mcp.tool()

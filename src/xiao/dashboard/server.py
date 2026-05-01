@@ -12,6 +12,8 @@ from fastapi import FastAPI, HTTPException
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
 
+from xiao.core.room_cleaning import start_room_clean
+
 logger = logging.getLogger(__name__)
 
 # ── Request models ────────────────────────────────────────────────
@@ -393,13 +395,15 @@ def create_app() -> FastAPI:
                 vac.set_fan_speed(req.fan)
             if req.water:
                 vac.set_water_level(req.water)
-            # Start room cleaning
-            try:
-                result = vac.clean_rooms_miot(req.room_ids)
-            except (AttributeError, Exception):
-                result = vac.clean_rooms(req.room_ids)
-            code = _extract_code(result)
-            return {"ok": code == 0, "rooms": req.room_ids, "result": result}
+            clean_result = start_room_clean(vac, req.room_ids)
+            return {
+                "ok": clean_result["accepted"],
+                "rooms": req.room_ids,
+                "result": clean_result["result"],
+                "verified_started": clean_result["verified_started"],
+                "warning": clean_result["warning"],
+                "transport": clean_result["transport"],
+            }
         except Exception as e:
             logger.exception("room clean failed")
             raise HTTPException(500, detail=str(e)) from e

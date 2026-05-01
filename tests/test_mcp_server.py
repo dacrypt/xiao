@@ -79,6 +79,24 @@ class TestCleanRoom:
             mcp_server.clean_room("bedroom")
         vac.clean_rooms.assert_called_once_with([3])
 
+    def test_surfaces_room_clean_warning_when_command_is_accepted_but_not_verified(self):
+        vac = MagicMock()
+        vac.clean_rooms_miot.return_value = {"code": 0}
+        vac.status.side_effect = [
+            {"state": "Charging Completed"},
+            {"state": "Charging Completed"},
+            {"state": "Charging Completed"},
+            {"state": "Charging Completed"},
+        ]
+        with (
+            patch.object(mcp_server, "_vac", return_value=vac),
+            patch("xiao.core.config.resolve_room", return_value=17),
+        ):
+            result = mcp_server.clean_room("kitchen")
+        assert result["code"] == 0
+        assert result["verified_started"] is False
+        assert "code=0" in result["warning"]
+
 
 class TestListRooms:
     def test_returns_id_name_pairs(self):

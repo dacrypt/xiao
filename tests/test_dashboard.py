@@ -68,6 +68,15 @@ class TestDashboardAdvancedSettings:
         assert "/api/settings/clean-rags-tip" in html
 
 
+class TestDashboardRoomCleaningWarnings:
+    def test_dashboard_surfaces_room_clean_verification_warnings_from_api(self):
+        html = _dashboard_html()
+
+        assert "const response = await api('/api/clean/rooms'" in html
+        assert "if (response.warning)" in html
+        assert "toast(response.warning, 'info')" in html
+
+
 class TestDashboardHistoryCopy:
     def test_dashboard_history_uses_clean_log_totals_instead_of_stale_last_clean_fields(self):
         html = _dashboard_html()
