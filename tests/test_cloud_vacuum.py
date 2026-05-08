@@ -332,6 +332,18 @@ class TestCloudVacuumHistoryDisplay:
         assert data["total_clean_count"] == 0
         assert data["total_clean_duration_display"] == "0min"
 
+    def test_clean_history_includes_estimated_cleaning_energy_from_total_minutes(self, vacuum):
+        """Expose a transparent kWh estimate from total runtime using the X20+ rated robot power."""
+        mock_results = [
+            {"siid": 12, "piid": 2, "code": 0, "value": 130},
+            {"siid": 12, "piid": 3, "code": 0, "value": 5},
+        ]
+        with patch("xiao.core.cloud_vacuum.cloud_get_properties", return_value=mock_results):
+            data = vacuum.clean_history()
+        assert data["estimated_cleaning_power_watts"] == 75
+        assert data["estimated_cleaning_energy_kwh"] == 0.163
+        assert data["estimated_cleaning_energy_display"] == "0.163 kWh @ 75W"
+
 
 class TestCloudVacuumWaterLevel:
     """Tests for water level — mop-mode property.

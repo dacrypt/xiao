@@ -85,3 +85,9 @@ class TestDashboardHistoryCopy:
         assert "d.first_clean_date || '--'" in html
         assert "label: 'Last Clean'" not in html
         assert "d.last_clean_date || '--'" not in html
+
+    def test_dashboard_history_exposes_estimated_cleaning_energy_tile(self):
+        html = _dashboard_html()
+
+        assert "d.estimated_cleaning_energy_display" in html
+        assert "label: 'Est. Energy'" in html

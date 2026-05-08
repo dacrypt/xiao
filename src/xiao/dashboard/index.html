@@ -2391,6 +2391,7 @@ async function refreshHistory() {
       { val: fmt(d.total_area ?? d.total_area_all), unit: 'm²', label: 'Total Area' },
       { val: fmt(d.total_clean_count ?? d.total_count), unit: '', label: 'Total Cleans' },
       { val: d.total_clean_duration_display || (d.total_clean_duration != null ? d.total_clean_duration + 'min' : '--'), unit: '', label: 'Total Time' },
+      { val: d.estimated_cleaning_energy_display || (d.estimated_cleaning_energy_kwh != null ? d.estimated_cleaning_energy_kwh + ' kWh' : '--'), unit: '', label: 'Est. Energy' },
       { val: d.first_clean_date || '--', unit: '', label: 'First Clean' },
     ];
 
