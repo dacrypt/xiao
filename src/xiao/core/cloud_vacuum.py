@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import json
 import logging
+from decimal import ROUND_HALF_UP, Decimal
 from typing import Any, cast
 
 from xiao.core.cloud import (
@@ -17,6 +18,9 @@ from xiao.core.cloud import (
 )
 
 logger = logging.getLogger(__name__)
+
+# Xiaomi Robot Vacuum X20+ published specs list rated robot power as 75W.
+ESTIMATED_CLEANING_POWER_WATTS = 75
 
 
 def _format_schedule_days(days: list[str]) -> str:
@@ -464,6 +468,15 @@ class CloudVacuumService:
                 data["total_clean_duration_display"] = f"{mins // 60}h {mins % 60}min"
             else:
                 data["total_clean_duration_display"] = f"{mins}min"
+
+            estimated_kwh = float(
+                (Decimal(mins) * Decimal(ESTIMATED_CLEANING_POWER_WATTS) / Decimal(60000)).quantize(
+                    Decimal("0.001"), rounding=ROUND_HALF_UP
+                )
+            )
+            data["estimated_cleaning_power_watts"] = ESTIMATED_CLEANING_POWER_WATTS
+            data["estimated_cleaning_energy_kwh"] = estimated_kwh
+            data["estimated_cleaning_energy_display"] = f"{estimated_kwh:.3f} kWh @ {ESTIMATED_CLEANING_POWER_WATTS}W"
 
         return data
 

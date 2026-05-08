@@ -34,6 +34,12 @@ def _format_area(area: float | None) -> str:
     return f"{area / 1_000_000:.1f} m²" if area > 10_000 else f"{area:.1f} m²"
 
 
+def _format_energy_kwh(energy: float | int | None) -> str:
+    if energy is None:
+        return "—"
+    return f"{float(energy):.3f} kWh"
+
+
 def _consumable_bar(remaining_str: str) -> str:
     """Create a colored remaining string."""
     if not remaining_str or not remaining_str.endswith("%"):
@@ -185,6 +191,10 @@ def render_full_status(data: dict[str, Any]) -> None:
             lines.append(f"    Total Time:   {_format_time(history['total_clean_duration'])}")
         if history.get("total_area") is not None:
             lines.append(f"    Total Area:   {_format_area(history['total_area'])}")
+        if history.get("estimated_cleaning_energy_display"):
+            lines.append(f"    Est. Energy:  {history['estimated_cleaning_energy_display']}")
+        elif history.get("estimated_cleaning_energy_kwh") is not None:
+            lines.append(f"    Est. Energy:  {_format_energy_kwh(history['estimated_cleaning_energy_kwh'])}")
         if history.get("last_clean_area") is not None:
             lines.append(f"    Recent Area:  {_format_area(history['last_clean_area'])}")
         if history.get("last_clean_duration") is not None:
@@ -286,6 +296,10 @@ def render_report(sections: dict[str, Any]) -> None:
             lines.append(f"  Recent Clean:   {hist['last_clean_date']}")
         elif hist.get("first_clean_date"):
             lines.append(f"  First Clean:    {hist['first_clean_date']}")
+        if hist.get("estimated_cleaning_energy_display"):
+            lines.append(f"  Est. Energy:    {hist['estimated_cleaning_energy_display']}")
+        elif hist.get("estimated_cleaning_energy_kwh") is not None:
+            lines.append(f"  Est. Energy:    {_format_energy_kwh(hist['estimated_cleaning_energy_kwh'])}")
         if hist.get("last_clean_area") is not None:
             lines.append(f"  Recent Area:    {_format_area(hist['last_clean_area'])}")
         if hist.get("last_clean_duration") is not None:
@@ -393,9 +407,17 @@ def render_rooms(rooms: list) -> None:
 def render_history(data: dict[str, Any]) -> None:
     lines = []
     for key, value in data.items():
+        if key in {"estimated_cleaning_power_watts", "estimated_cleaning_energy_kwh"} and data.get(
+            "estimated_cleaning_energy_display"
+        ):
+            continue
         label = key.replace("_", " ").title()
         if "area" in key:
             lines.append(f"  [bold]{label}:[/bold]  {_format_area(value)}")
+        elif key.endswith("energy_display"):
+            lines.append(f"  [bold]{label}:[/bold]  {value}")
+        elif "energy" in key and isinstance(value, (int, float)):
+            lines.append(f"  [bold]{label}:[/bold]  {_format_energy_kwh(value)}")
         elif "duration" in key:
             lines.append(f"  [bold]{label}:[/bold]  {_format_time(value)}")
         elif "count" in key or "date" in key:
