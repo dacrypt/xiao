@@ -115,7 +115,7 @@ body::before {
   box-shadow: 0 0 30px rgba(0, 212, 170, 0.03);
 }
 
-/* ── WATER TANK ALERT — BIG RED IMPOSSIBLE TO MISS ─────────── */
+/* ── STATE 21 PAUSE BANNER — BIG RED IMPOSSIBLE TO MISS ───── */
 #waterTankAlert {
   display: none;
   background: linear-gradient(135deg, rgba(255, 30, 30, 0.25), rgba(255, 100, 0, 0.2));
@@ -1474,12 +1474,12 @@ input[type=range]::-webkit-slider-thumb:hover {
 </head>
 <body>
 
-<!-- ═══ WATER TANK ALERT — IMPOSSIBLE TO MISS ═══ -->
+<!-- ═══ STATE 21 PAUSE BANNER — IMPOSSIBLE TO MISS ═══ -->
 <div id="waterTankAlert">
   <div class="wta-inner">
     <div class="wta-icon">⚠️</div>
     <div class="wta-text">
-      <div class="wta-title">WATER TANK ALERT</div>
+      <div class="wta-title">WASHING MOP PAUSED</div>
       <div class="wta-desc">Check clean water tank (refill) and dirty water tank (empty)</div>
     </div>
     <button class="wta-resume" onclick="doResumeAfterTank()">▶ Resume Cleaning</button>
@@ -1944,14 +1944,15 @@ const STATE_MAP = {
   'Building map':          { display: 'Mapping',        color: 'purple', icon: '🗺',  cssClass: 'cleaning', pulse: true },
   'Upgrading':             { display: 'Updating',       color: 'yellow', icon: '⬆️',  cssClass: 'docked' },
   'Water Inspecting':      { display: 'Checking Water', color: 'yellow', icon: '💧',  cssClass: 'docked' },
+  'WashingMopPause':       { display: 'Washing Mop Paused', color: 'red', icon: '⚠️', cssClass: 'docked', pulse: true, isWaterTank: true },
   'Dust Collecting':       { display: 'Collecting Dust',color: 'orange', icon: '🗑',  cssClass: 'docked' },
   'Remote Clean':          { display: 'Remote Clean',   color: 'green',  icon: '📡',  cssClass: 'cleaning', pulse: true },
 };
 
 function getStateInfo(state) {
-  // Check for water tank alert first
-  if (state.includes('Water Tank') || state === 'Unknown(21)') {
-    return { display: '⚠️ WATER TANK!', color: 'red', icon: '⚠️', cssClass: 'docked', pulse: true, isWaterTank: true };
+  // State 21 is officially WashingMopPause; keep the tank-service guidance separate.
+  if (state === 'WashingMopPause' || state === 'Unknown(21)') {
+    return { display: '⚠️ WASHING MOP PAUSED', color: 'red', icon: '⚠️', cssClass: 'docked', pulse: true, isWaterTank: true };
   }
   // Exact match
   if (STATE_MAP[state]) return STATE_MAP[state];
@@ -2075,7 +2076,7 @@ async function refreshStatus() {
     const state = d.state || 'Unknown';
     const info = getStateInfo(state);
 
-    // ── Water Tank Alert (IMPOSSIBLE TO MISS) ──
+    // ── State 21 pause banner (IMPOSSIBLE TO MISS) ──
     const waterAlert = document.getElementById('waterTankAlert');
     if (info.isWaterTank || d.alert) {
       waterAlert.classList.add('show');
@@ -2919,7 +2920,7 @@ async function refreshAllProperties() {
       1: 'Sweeping', 2: 'Idle', 3: 'Paused', 4: 'Error', 5: 'Go Charging',
       6: 'Charging', 7: 'Mopping', 8: 'Drying', 9: 'Washing Mop',
       10: 'Go Washing', 11: 'Building Map', 12: 'Sweep & Mop', 13: 'Charging Completed',
-      14: 'Upgrading', 19: 'Water Inspecting', 21: 'Water Tank Alert',
+      14: 'Upgrading', 19: 'Water Inspecting', 21: 'WashingMopPause',
       22: 'Dust Collecting', 23: 'Remote Clean',
     };
     const modeNames = { 0: 'Sweep', 1: 'Mop', 2: 'Sweep & Mop', 3: 'Custom' };

@@ -79,6 +79,15 @@ def _reset_vacuum():
 # ── App factory ───────────────────────────────────────────────────
 
 
+def _is_state_21_pause(state: Any) -> bool:
+    state_text = str(state)
+    return state_text == "WashingMopPause" or state_text == "Unknown(21)"
+
+
+def _state_21_alert(cta: str) -> str:
+    return f"⚠️ Washing mop paused. Check clean water (refill) and dirty water (empty), then {cta}."
+
+
 def create_app() -> FastAPI:
     app = FastAPI(title="Xiaomi X20+ Mission Control", version="2.0.0")
 
@@ -112,10 +121,8 @@ def create_app() -> FastAPI:
                 data["fan"] = data["fan_speed"]
             # Add alert field (same logic as /api/status/live)
             state = data.get("state", "Unknown")
-            if "Water Tank" in str(state) or state == "Unknown(21)":
-                data["alert"] = (
-                    "⚠️ Water tank alert! Check clean water (refill) and dirty water (empty). Press Resume after fixing."
-                )
+            if _is_state_21_pause(state):
+                data["alert"] = _state_21_alert("press Resume after fixing")
             return data
         except Exception as e:
             logger.exception("status failed")
@@ -142,8 +149,8 @@ def create_app() -> FastAPI:
             data = vac.status()
             state = data.get("state", "Unknown")
             alert = None
-            if "Water Tank" in str(state) or state == "Unknown(21)":
-                alert = "⚠️ Water tank alert! Check clean water (refill) and dirty water (empty). Press button on robot after fixing."
+            if _is_state_21_pause(state):
+                alert = _state_21_alert("press the button on the robot after fixing")
             return {
                 "state": state,
                 "battery": data.get("battery", 0),
@@ -624,8 +631,9 @@ def create_app() -> FastAPI:
     async def update_tank_tracking():
         """Called periodically to update tank estimates based on cleaning history.
 
-        Auto-resets tanks when vacuum exits Water Tank Alert (state 21) —
-        this means the user fixed the tanks, so we reset automatically.
+        Auto-resets tanks when vacuum exits state 21 (WashingMopPause).
+        We keep the existing tank-reset heuristic because that pause still tends
+        to coincide with servicing the clean/dirty water tanks on X20+ setups.
         """
         from xiao.core.config import get_tank_state, save_tank_state
         from xiao.core.config import reset_tanks as _reset_tanks
@@ -639,11 +647,11 @@ def create_app() -> FastAPI:
             current_state = data.get("state", "")
             prev_state = state.get("last_seen_state", "")
 
-            # Auto-reset: if previous state was Water Tank Alert and now it's not
-            was_tank_alert = "Water Tank" in prev_state or prev_state == "Unknown(21)"
-            is_tank_alert = "Water Tank" in current_state
+            # Auto-reset: if previous state was WashingMopPause and now it's not
+            was_tank_alert = _is_state_21_pause(prev_state)
+            is_tank_alert = _is_state_21_pause(current_state)
             if was_tank_alert and not is_tank_alert:
-                logger.info("Water tank alert resolved — auto-resetting tank estimates")
+                logger.info("State 21 pause resolved — auto-resetting tank estimates")
                 state = _reset_tanks("both")
 
             # Track current state for next comparison

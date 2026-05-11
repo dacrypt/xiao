@@ -33,6 +33,58 @@ class TestDashboardSettingsSnapshot:
         assert response.json()["carpet_avoidance"] == {"mode": "avoid", "raw": 1}
 
 
+class TestDashboardStatusAlerts:
+    def test_status_endpoint_keeps_state_21_name_but_adds_tank_guidance(self):
+        mock_vacuum = MagicMock()
+        mock_vacuum.status.return_value = {"state": "WashingMopPause"}
+
+        with patch("xiao.dashboard.server._get_vacuum", return_value=mock_vacuum):
+            client = TestClient(create_app())
+            response = client.get("/api/status")
+
+        assert response.status_code == 200
+        body = response.json()
+        assert body["state"] == "WashingMopPause"
+        assert "clean water" in body["alert"]
+        assert "dirty water" in body["alert"]
+
+    def test_tank_update_auto_resets_when_leaving_washing_mop_pause_state(self, tmp_path):
+        mock_vacuum = MagicMock()
+        mock_vacuum.clean_history.return_value = {"total_area": 120}
+        mock_vacuum.status.return_value = {"state": "Charging Completed"}
+
+        prior_state = {
+            "clean_tank_reset_at": None,
+            "dirty_tank_reset_at": None,
+            "area_since_clean_reset": 33,
+            "area_since_dirty_reset": 44,
+            "last_total_area": 120,
+            "last_seen_state": "WashingMopPause",
+        }
+        reset_state = {
+            **prior_state,
+            "area_since_clean_reset": 0,
+            "area_since_dirty_reset": 0,
+        }
+
+        with (
+            patch("xiao.dashboard.server._get_vacuum", return_value=mock_vacuum),
+            patch("xiao.core.config.CONFIG_DIR", tmp_path),
+            patch("xiao.core.config.CONFIG_FILE", tmp_path / "config.toml"),
+            patch("xiao.core.config.TANK_STATE_FILE", tmp_path / "tank_state.json"),
+            patch("xiao.core.config.get_tank_state", return_value=prior_state),
+            patch("xiao.core.config.reset_tanks", return_value=reset_state) as mock_reset,
+            patch("xiao.core.config.save_tank_state") as mock_save,
+        ):
+            client = TestClient(create_app())
+            response = client.post("/api/tanks/update")
+
+        assert response.status_code == 200
+        mock_reset.assert_called_once_with("both")
+        saved_state = mock_save.call_args.args[0]
+        assert saved_state["last_seen_state"] == "Charging Completed"
+
+
 class TestDashboardRoomCleaning:
     def test_room_clean_endpoint_returns_warning_when_accept_succeeds_but_start_is_unverified(self):
         mock_vacuum = MagicMock()

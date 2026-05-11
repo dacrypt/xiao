@@ -528,15 +528,26 @@ class TestCloudVacuumStatusCodes:
         assert data["state"] == "Charging Completed", "Status 13 should be 'Charging Completed' per official MIoT spec"
 
     def test_status_21_is_washing_mop_pause(self, vacuum):
-        """Official spec: status 21 = 'WashingMopPause' (NOT water tank alert)."""
+        """Official spec: status 21 = 'WashingMopPause'; tank guidance belongs in a separate alert."""
         mock_results = [{"siid": 2, "piid": 1, "code": 0, "value": 21}]
         with patch("xiao.core.cloud_vacuum.cloud_get_properties", return_value=mock_results):
             data = vacuum.status()
-        # Per official spec it's WashingMopPause; our code has ⚠️ Water Tank Alert as a warning
-        # Keep the user-friendly alert label but note official name
-        assert "21" in str(data["state"]) or "WashingMop" in str(data["state"]) or "Water" in str(data["state"]), (
-            f"Status 21 should be either WashingMopPause or Water Tank Alert, got: {data['state']}"
-        )
+        assert data["state"] == "WashingMopPause"
+
+    def test_full_status_adds_tank_guidance_without_overwriting_official_state_name(self, vacuum):
+        with (
+            patch.object(vacuum, "status", return_value={"state": "WashingMopPause"}),
+            patch.object(vacuum, "dnd_status", return_value={}),
+            patch.object(vacuum, "water_level", return_value={}),
+            patch.object(vacuum, "consumable_status", return_value={}),
+            patch.object(vacuum, "clean_history", return_value={}),
+            patch.object(vacuum, "schedules_parsed", return_value=[]),
+        ):
+            data = vacuum.full_status()
+
+        assert data["state"] == "WashingMopPause"
+        assert "clean water tank" in data["alert"]
+        assert "dirty water tank" in data["alert"]
 
     def test_status_9_is_washing(self, vacuum):
         """Official spec: status 9 = 'Washing' (was 'Washing mop' with lowercase mop)."""

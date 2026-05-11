@@ -194,7 +194,7 @@ class CloudVacuumService:
             13: "Charging Completed",
             14: "Upgrading",
             19: "Water Inspecting",
-            21: "⚠️ Water Tank Alert",
+            21: "WashingMopPause",
             22: "Dust Collecting",
             23: "Remote Clean",
         }
@@ -893,10 +893,12 @@ class CloudVacuumService:
     def full_status(self) -> dict[str, Any]:
         """Get comprehensive status: state + battery + fan + mode + DND + mop + schedules summary."""
         data = self.status()
-        # Detect water tank alert
-        if data.get("state") == "⚠️ Water Tank Alert":
+        # Official state 21 name is WashingMopPause. Keep tank-service guidance as
+        # a separate alert because adjacent ecosystem docs and field reports still
+        # point users to refill/empty the base tanks when this pause appears.
+        if data.get("state") in {"WashingMopPause", "Unknown(21)"}:
             data["alert"] = (
-                "Water tank needs attention! Check: clean water tank (refill) and dirty water tank (empty). Press button on robot after fixing."
+                "Washing mop paused. Check the clean water tank (refill) and dirty water tank (empty), then press the button on the robot after fixing."
             )
         # Add DND
         try:
