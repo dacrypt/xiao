@@ -381,7 +381,7 @@ Agents should apply these in order before asking the user.
 |---|---|---|
 | Stderr contains `token` / `401` / `auth` | Re-run the same command once (CDP refresh fires on next call) | `xiao cloud-login`, then retry |
 | Stderr: `Cannot connect to browser CDP on port 18800` | Launch `chromium --remote-debugging-port=18800 --user-data-dir=~/.xiao-chromium`, user logs in at `account.xiaomi.com` | Fall back to `xiao cloud-login` |
-| `State: 21` / "WashingMopPause" / "Water Tank Alert" | User refills clean water / empties dirty water → `xiao start` | Press physical play button on the robot |
+| `State: 21` / `WashingMopPause` | Usually the user refills clean water / empties dirty water, then `xiao start` | Press physical play button on the robot |
 | `xiao clean -r <id>` returns code 0 but `xiao status` after 10s still shows `Idle`/`Docked` | Fall back to `xiao start` | Report to user |
 | Fan speed set rejected while docked | Start the clean first, then set speed; or pass `--speed` inline on the clean command | — |
 | `xiao map rooms` → "No rooms found" | Vacuum hasn't mapped the house yet — user must run `xiao start` once first | — |
@@ -521,8 +521,8 @@ The robot hasn't mapped your house yet. Run `xiao start` once end-to-end and let
 **Fan speed setting is rejected while docked**
 Some MIoT properties are only writable while the robot is off the dock. Start a clean first, or pass `--speed` inline on the `clean` command.
 
-**Water tank alert (state 21)**
-Refill the clean-water tank / empty the dirty-water tank at the base. Then `xiao start` to resume. If the robot still sits in state 21, press the physical play button on the top of the robot.
+**WashingMopPause (state 21)**
+This is the official X20+ state name. In practice it often means the clean-water tank needs a refill or the dirty-water tank needs emptying at the base. Then `xiao start` to resume. If the robot still sits in state 21, press the physical play button on the top of the robot.
 
 ---
 

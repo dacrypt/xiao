@@ -50,6 +50,16 @@ class TestDashboardDryTimeCopy:
         assert "Sweep Type / Dry Time" not in html
 
 
+class TestDashboardState21Copy:
+    def test_dashboard_keeps_state_21_as_washing_mop_pause_while_preserving_tank_guidance(self):
+        html = _dashboard_html()
+
+        assert "WashingMopPause" in html
+        assert "Water Tank Alert" not in html
+        assert "clean water" in html
+        assert "dirty water" in html
+
+
 class TestDashboardAdvancedSettings:
     def test_dashboard_exposes_advanced_setting_controls_and_api_hooks(self):
         html = _dashboard_html()
