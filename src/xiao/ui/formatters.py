@@ -40,6 +40,19 @@ def _format_energy_kwh(energy: float | int | None) -> str:
     return f"{float(energy):.3f} kWh"
 
 
+def _format_waterbox_status(status: Any) -> str:
+    if status is None:
+        return "—"
+    text = str(status).strip()
+    if not text:
+        return "—"
+    if text.lower() == "attached":
+        return "Attached"
+    if text.lower() == "detached":
+        return "Detached"
+    return text
+
+
 def _consumable_bar(remaining_str: str) -> str:
     """Create a colored remaining string."""
     if not remaining_str or not remaining_str.endswith("%"):
@@ -84,6 +97,10 @@ def render_status(data: dict[str, Any]) -> None:
     if charging is not None:
         lines.append(f"  [bold]Charging:[/bold] {charging}")
 
+    waterbox_status = data.get("waterbox_status")
+    if waterbox_status is not None:
+        lines.append(f"  [bold]Water Box:[/bold] {_format_waterbox_status(waterbox_status)}")
+
     dry_left = data.get("dry_left_time_min")
     if dry_left is not None:
         lines.append(f"  [bold]Dry Left:[/bold] {_format_time(dry_left)}")
@@ -99,6 +116,9 @@ def render_status(data: dict[str, Any]) -> None:
         "is_on",
         "mode",
         "charging",
+        "waterbox_attached",
+        "waterbox_status",
+        "waterbox_status_raw",
         "dry_left_time_min",
         "fan_level_raw",
         "dnd",
@@ -139,6 +159,10 @@ def render_full_status(data: dict[str, Any]) -> None:
     charging = data.get("charging")
     if charging is not None:
         lines.append(f"  [bold]Charging:[/bold]   {charging}")
+
+    waterbox_status = data.get("waterbox_status")
+    if waterbox_status is not None:
+        lines.append(f"  [bold]Water Box:[/bold]  {_format_waterbox_status(waterbox_status)}")
 
     dry_left = data.get("dry_left_time_min")
     if dry_left is not None:
@@ -229,6 +253,9 @@ def render_report(sections: dict[str, Any]) -> None:
         lines.append(f"  Fan:      {fan}")
         if charging:
             lines.append(f"  Charging: {charging}")
+        waterbox_status = status.get("waterbox_status")
+        if waterbox_status is not None:
+            lines.append(f"  Water Box: {_format_waterbox_status(waterbox_status)}")
 
         console.print(Panel("\n".join(lines), title="◈ Status", border_style="cyan"))
 

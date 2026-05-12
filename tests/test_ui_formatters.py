@@ -52,6 +52,18 @@ class TestRenderFullStatus:
         assert "0.163 kWh @ 75W" in rendered
         assert "Last Clean" not in rendered
 
+    def test_render_full_status_includes_waterbox_status(self, monkeypatch):
+        output = StringIO()
+        monkeypatch.setattr(
+            formatters, "console", Console(file=output, force_terminal=False, color_system=None, width=120)
+        )
+
+        formatters.render_full_status({"state": "Mopping", "waterbox_status": "attached"})
+
+        rendered = output.getvalue()
+        assert "Water Box:" in rendered
+        assert "Attached" in rendered
+
 
 class TestRenderReport:
     def test_render_report_includes_estimated_cleaning_energy(self, monkeypatch):

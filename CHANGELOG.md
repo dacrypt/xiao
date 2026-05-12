@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.5](https://github.com/dacrypt/xiao/compare/v0.6.4...v0.6.5) (2026-05-12)
+
+### Fixed
+
+* **status:** surface the X20+ `waterbox-status` (`siid 4 piid 6`) across CLI and Mission Control so users can immediately see whether the mop water box is attached during mopping/setup diagnostics
+
 ## [0.6.4](https://github.com/dacrypt/xiao/compare/v0.6.3...v0.6.4) (2026-05-11)
 
 ### Fixed

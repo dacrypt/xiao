@@ -2118,6 +2118,12 @@ async function refreshStatus() {
     if (currentDndEnabled) {
       tagsHtml += `<span class="tag" style="border-color:var(--purple)">🌙 <span class="val" style="color:var(--purple)">DND</span></span>`;
     }
+    if (d.waterbox_status) {
+      const waterBoxAttached = d.waterbox_attached !== false;
+      const waterBoxColor = waterBoxAttached ? 'var(--blue)' : 'var(--warning)';
+      const waterBoxLabel = waterBoxAttached ? 'Attached' : 'Missing';
+      tagsHtml += `<span class="tag" style="border-color:${waterBoxColor}">🚰 <span class="val" style="color:${waterBoxColor}">Water Box ${waterBoxLabel}</span></span>`;
+    }
     tags.innerHTML = tagsHtml;
 
     // Battery

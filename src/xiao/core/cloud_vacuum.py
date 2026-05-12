@@ -88,6 +88,7 @@ MIOT_SPEC = {
     "fault": {"siid": 2, "piid": 2},
     # siid 4 = vacuum-extend (Xiaomi-specific service, not standard MIoT)
     "mop_mode": {"siid": 4, "piid": 5},  # mop-mode / water level (1=Low, 2=Medium, 3=High) — WRITABLE
+    "waterbox_status": {"siid": 4, "piid": 6},  # waterbox-status (0=No/Detached, 1=Yes/Attached)
     "break_point_restart": {"siid": 4, "piid": 11},  # Resume after charge (0=Off, 1=On) — writable
     "carpet_press": {"siid": 4, "piid": 12},  # Carpet boost (0=Off, 1=On) — writable
     "child_lock": {"siid": 4, "piid": 27},  # Child lock (0=Off, 1=On) — writable
@@ -164,6 +165,7 @@ class CloudVacuumService:
           siid 2 piid 5 = dry-left-time (minutes, read-only)
           siid 3 piid 1 = battery level (%)
           siid 3 piid 2 = charging state (1=Charging, 2=Not Charging, 5=Go Charging)
+          siid 4 piid 6 = waterbox-status (0=No/Detached, 1=Yes/Attached)
         """
         props_to_get = [
             MIOT_SPEC["sweep_status"],
@@ -172,6 +174,7 @@ class CloudVacuumService:
             MIOT_SPEC["dry_left_time"],
             MIOT_SPEC["battery_level"],
             MIOT_SPEC["charging_state"],
+            MIOT_SPEC["waterbox_status"],
         ]
 
         results = cloud_get_properties(self.cloud, self.did, props_to_get, country=self.country)
@@ -231,6 +234,11 @@ class CloudVacuumService:
             elif siid == 3 and piid == 2:
                 charging = {1: "Charging", 2: "Not charging", 3: "Charged", 5: "Go Charging"}
                 data["charging"] = charging.get(value, str(value))
+            elif siid == 4 and piid == 6:
+                waterbox_status = {0: "detached", 1: "attached"}
+                data["waterbox_attached"] = value == 1
+                data["waterbox_status"] = waterbox_status.get(value, str(value))
+                data["waterbox_status_raw"] = value
 
         return data
 

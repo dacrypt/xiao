@@ -60,6 +60,14 @@ class TestDashboardState21Copy:
         assert "dirty water" in html
 
 
+class TestDashboardWaterBoxStatus:
+    def test_dashboard_surfaces_waterbox_status_from_live_status_payload(self):
+        html = _dashboard_html()
+
+        assert "d.waterbox_status" in html
+        assert "Water Box" in html
+
+
 class TestDashboardAdvancedSettings:
     def test_dashboard_exposes_advanced_setting_controls_and_api_hooks(self):
         html = _dashboard_html()
