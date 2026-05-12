@@ -67,6 +67,19 @@ class TestCloudVacuumStatus:
         # fan_speed should NOT appear for piid=2 data
         assert "fan_speed" not in data, "siid 2 piid 2 is device fault, not fan speed — should not populate fan_speed"
 
+    def test_status_decodes_waterbox_attachment_from_vacuum_extend(self, vacuum):
+        """siid 4 piid 6 is the official waterbox-status enum (0=No, 1=Yes)."""
+        mock_results = [
+            {"siid": 4, "piid": 6, "code": 0, "value": 1},
+        ]
+        with patch("xiao.core.cloud_vacuum.cloud_get_properties", return_value=mock_results) as mock_get:
+            data = vacuum.status()
+
+        called_props = mock_get.call_args[0][2]
+        assert any(p.get("siid") == 4 and p.get("piid") == 6 for p in called_props)
+        assert data["waterbox_attached"] is True
+        assert data["waterbox_status"] == "attached"
+
 
 class TestCloudVacuumConsumables:
     def test_consumable_status(self, vacuum):
