@@ -109,3 +109,21 @@ class TestDashboardHistoryCopy:
 
         assert "d.estimated_cleaning_energy_display" in html
         assert "label: 'Est. Energy'" in html
+
+
+class TestDashboardVacuumExtendDiagnosticsCopy:
+    def test_dashboard_relabels_known_vacuum_extend_fields_in_clean_log_panel(self):
+        html = _dashboard_html()
+
+        assert "4.4 Cleaning Mode" in html
+        assert "4.5 Mop Mode" in html
+        assert "4.6 Waterbox Status" in html
+        assert "4.7 Task Status" in html
+        assert "4.11 Resume After Charge" in html
+        assert "4.12 Carpet Boost" in html
+        assert "4.4 Unknown" not in html
+        assert "4.5 Unknown" not in html
+        assert "4.6 Unknown" not in html
+        assert "4.7 Unknown" not in html
+        assert "4.11 Unknown" not in html
+        assert "4.12 Unknown" not in html
