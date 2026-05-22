@@ -2930,6 +2930,20 @@ async function refreshAllProperties() {
       22: 'Dust Collecting', 23: 'Remote Clean',
     };
     const modeNames = { 0: 'Sweep', 1: 'Mop', 2: 'Sweep & Mop', 3: 'Custom' };
+    const vacuumExtendValueMaps = {
+      prop4: { 0: 'Quiet', 1: 'Standard', 2: 'Medium', 3: 'Strong' },
+      prop5: { 1: 'Low', 2: 'Medium', 3: 'High' },
+      prop6: { 0: 'Detached', 1: 'Attached' },
+      prop11: { 0: 'Off', 1: 'On' },
+      prop12: { 0: 'Off', 1: 'On' },
+    };
+
+    function formatVacuumExtendValue(value, valueMap) {
+      if (value === null || value === undefined || value === '') return '--';
+      const label = valueMap[value];
+      if (!label) return `Unknown (raw: ${value})`;
+      return `${label} (raw: ${value})`;
+    }
 
     cleanLogArea.innerHTML = `
       <div class="cleanlog-grid">
@@ -2946,15 +2960,15 @@ async function refreshAllProperties() {
           <div class="cleanlog-label">Total Area</div>
         </div>
         <div class="cleanlog-item" style="border-color: rgba(170,102,255,0.2)">
-          <div class="cleanlog-val" style="color:var(--purple)">${cl.prop4 ?? '--'}</div>
+          <div class="cleanlog-val" style="color:var(--purple)">${formatVacuumExtendValue(cl.prop4, vacuumExtendValueMaps.prop4)}</div>
           <div class="cleanlog-label">4.4 Cleaning Mode</div>
         </div>
         <div class="cleanlog-item" style="border-color: rgba(170,102,255,0.2)">
-          <div class="cleanlog-val" style="color:var(--purple)">${cl.prop5 ?? '--'}</div>
+          <div class="cleanlog-val" style="color:var(--purple)">${formatVacuumExtendValue(cl.prop5, vacuumExtendValueMaps.prop5)}</div>
           <div class="cleanlog-label">4.5 Mop Mode</div>
         </div>
         <div class="cleanlog-item" style="border-color: rgba(170,102,255,0.2)">
-          <div class="cleanlog-val" style="color:var(--purple)">${cl.prop6 ?? '--'}</div>
+          <div class="cleanlog-val" style="color:var(--purple)">${formatVacuumExtendValue(cl.prop6, vacuumExtendValueMaps.prop6)}</div>
           <div class="cleanlog-label">4.6 Waterbox Status</div>
         </div>
         <div class="cleanlog-item" style="border-color: rgba(170,102,255,0.2)">
@@ -2962,11 +2976,11 @@ async function refreshAllProperties() {
           <div class="cleanlog-label">4.7 Task Status</div>
         </div>
         <div class="cleanlog-item" style="border-color: rgba(170,102,255,0.2)">
-          <div class="cleanlog-val" style="color:var(--purple)">${cl.prop11 ?? '--'}</div>
+          <div class="cleanlog-val" style="color:var(--purple)">${formatVacuumExtendValue(cl.prop11, vacuumExtendValueMaps.prop11)}</div>
           <div class="cleanlog-label">4.11 Resume After Charge</div>
         </div>
         <div class="cleanlog-item" style="border-color: rgba(170,102,255,0.2)">
-          <div class="cleanlog-val" style="color:var(--purple)">${cl.prop12 ?? '--'}</div>
+          <div class="cleanlog-val" style="color:var(--purple)">${formatVacuumExtendValue(cl.prop12, vacuumExtendValueMaps.prop12)}</div>
           <div class="cleanlog-label">4.12 Carpet Boost</div>
         </div>
       </div>

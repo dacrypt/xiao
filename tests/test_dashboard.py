@@ -127,3 +127,21 @@ class TestDashboardVacuumExtendDiagnosticsCopy:
         assert "4.7 Unknown" not in html
         assert "4.11 Unknown" not in html
         assert "4.12 Unknown" not in html
+
+    def test_dashboard_decodes_known_vacuum_extend_enum_values_while_preserving_raw_values(self):
+        html = _dashboard_html()
+
+        assert "const vacuumExtendValueMaps = {" in html
+        assert "prop4: { 0: 'Quiet', 1: 'Standard', 2: 'Medium', 3: 'Strong' }," in html
+        assert "prop5: { 1: 'Low', 2: 'Medium', 3: 'High' }," in html
+        assert "prop6: { 0: 'Detached', 1: 'Attached' }," in html
+        assert "prop11: { 0: 'Off', 1: 'On' }," in html
+        assert "prop12: { 0: 'Off', 1: 'On' }," in html
+        assert "function formatVacuumExtendValue(value, valueMap) {" in html
+        assert "return `${label} (raw: ${value})`;" in html
+        assert "${formatVacuumExtendValue(cl.prop4, vacuumExtendValueMaps.prop4)}" in html
+        assert "${formatVacuumExtendValue(cl.prop5, vacuumExtendValueMaps.prop5)}" in html
+        assert "${formatVacuumExtendValue(cl.prop6, vacuumExtendValueMaps.prop6)}" in html
+        assert "${cl.prop7 ?? '--'}" in html
+        assert "${formatVacuumExtendValue(cl.prop11, vacuumExtendValueMaps.prop11)}" in html
+        assert "${formatVacuumExtendValue(cl.prop12, vacuumExtendValueMaps.prop12)}" in html
