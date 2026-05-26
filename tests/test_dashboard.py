@@ -127,3 +127,17 @@ class TestDashboardVacuumExtendDiagnosticsCopy:
         assert "4.7 Unknown" not in html
         assert "4.11 Unknown" not in html
         assert "4.12 Unknown" not in html
+
+    def test_dashboard_decodes_known_vacuum_extend_enum_values_while_preserving_raw_values(self):
+        html = _dashboard_html()
+
+        assert "const vacuumExtendCleaningModeMap = { 0: 'Quiet', 1: 'Standard', 2: 'Medium', 3: 'Strong' };" in html
+        assert "const vacuumExtendMopModeMap = { 1: 'Low', 2: 'Medium', 3: 'High' };" in html
+        assert "const vacuumExtendWaterboxStatusMap = { 0: 'Detached', 1: 'Attached' };" in html
+        assert "const vacuumExtendToggleMap = { 0: 'Disabled', 1: 'Enabled' };" in html
+        assert "return `${label} · raw ${value}`;" in html
+        assert "formatVacuumExtendEnum(cl.prop4, vacuumExtendCleaningModeMap)" in html
+        assert "formatVacuumExtendEnum(cl.prop5, vacuumExtendMopModeMap)" in html
+        assert "formatVacuumExtendEnum(cl.prop6, vacuumExtendWaterboxStatusMap)" in html
+        assert "formatVacuumExtendEnum(cl.prop11, vacuumExtendToggleMap)" in html
+        assert "formatVacuumExtendEnum(cl.prop12, vacuumExtendToggleMap)" in html

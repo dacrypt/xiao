@@ -1762,7 +1762,7 @@ wheels = [
 
 [[package]]
 name = "xiao-cli"
-version = "0.5.3"
+version = "0.7.2"
 source = { editable = "." }
 dependencies = [
     { name = "ddddocr" },
