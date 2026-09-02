@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.7.2](https://github.com/dacrypt/xiao/compare/v0.7.1...v0.7.2) (2026-05-26)
 
+
+### Fixed
+
+* **dashboard:** decode vacuum-extend diagnostics values ([c2d5925](https://github.com/dacrypt/xiao/commit/c2d5925afaeee5e4c12ced3ae0bbbb3831df4fd7))
+* **dashboard:** decode vacuum-extend diagnostics values ([2ee2b1b](https://github.com/dacrypt/xiao/commit/2ee2b1bb3c0a63bb86d65e007f515c973924b03c))
+
+## [0.7.2](https://github.com/dacrypt/xiao/compare/v0.7.1...v0.7.2) (2026-05-26)
+
 ### Fixed
 
 * **dashboard:** decode the known X20+ `vacuum-extend` diagnostics enums into human labels while preserving each raw `siid 4` value for debugging
