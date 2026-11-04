@@ -32,8 +32,26 @@ app = typer.Typer(
 )
 
 
+def _print_version(value: bool) -> None:
+    if value:
+        from xiao import __version__
+
+        sys.stdout.write(f"xiao {__version__}\n")
+        raise typer.Exit(0)
+
+
 @app.callback()
-def _root_callback(ctx: typer.Context) -> None:
+def _root_callback(
+    ctx: typer.Context,
+    version: bool = typer.Option(
+        False,
+        "--version",
+        "-V",
+        callback=_print_version,
+        is_eager=True,
+        help="Print the xiao version and exit.",
+    ),
+) -> None:
     """Run on every CLI invocation. Shows the first-run CTA; sets up
     debug logging when XIAO_DEBUG=1; when no subcommand is given, prints
     vacuum status if configured, or help otherwise."""

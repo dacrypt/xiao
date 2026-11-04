@@ -32,6 +32,17 @@ happen with zero manual steps.
      `release: published`, runs `uv build`, and uploads to PyPI via OIDC
      (no API token stored in the repo).
 
+### Don't bump or tag by hand
+
+`xiao --version` / `xiao.__version__` are read from the installed package
+metadata, so `pyproject.toml` is the only place the version lives — and
+release-please owns it. Editing it in a feature PR, or pushing a `vX.Y.Z` tag
+yourself, makes the next release PR collide with an existing tag
+(`Validation Failed: already_exists`): no GitHub Release is created and
+`publish.yml` is never dispatched. That is exactly what happened to v0.7.2,
+which had to be uploaded manually. CI's `package` job checks that the built
+wheel reports the same version as `pyproject.toml`.
+
 ### Bump rules
 
 | Commit type            | Bump        |
@@ -59,8 +70,9 @@ required reviewers — the workflow references it for the OIDC claim.
 
 ### Manual release (fallback)
 
-If release-please is unavailable, bump `version` in `pyproject.toml`, update
-`CHANGELOG.md`, tag, and publish manually:
+Only if release-please is unavailable: bump `version` in `pyproject.toml`
+**and** `.release-please-manifest.json` (keep them equal, or the next
+automated release will break), update `CHANGELOG.md`, tag, and publish:
 
 ```bash
 uv build
