@@ -515,3 +515,13 @@ def test_latest_code_wins_regardless_of_phrasing():
     assert _extract_code_from_text(body) == "222222"
     body = "Code: 222222\n...\nYour verification code is 333333"
     assert _extract_code_from_text(body) == "333333"
+
+
+def test_version_flag_matches_package_metadata():
+    from importlib.metadata import version
+
+    from xiao.cli.app import app
+
+    result = runner.invoke(app, ["--version"])
+    assert result.exit_code == 0
+    assert result.stdout.strip() == f"xiao {version('xiao-cli')}"
