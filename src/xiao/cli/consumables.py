@@ -8,6 +8,7 @@ import sys
 import typer
 from rich import print as rprint
 
+from xiao.core.room_cleaning import extract_code
 from xiao.ui.formatters import render_consumables
 
 app = typer.Typer(no_args_is_help=False)
@@ -47,16 +48,26 @@ def reset(
     vac = _vacuum()
     if component == "all":
         results = vac.consumable_reset_all()
+        failed = 0
         for name, result in results.items():
             if result.get("ok"):
                 rprint(f"  [green]✓ {name} reset[/green]")
             else:
+                failed += 1
                 err = result.get("error") or f"code {result.get('code')}"
                 rprint(f"  [red]✗ {name}: {err}[/red]")
+        if failed:
+            rprint(f"[red]{failed} consumable reset(s) failed.[/red]")
+            raise typer.Exit(1)
         rprint("[green]All consumables reset.[/green]")
     else:
         try:
-            vac.consumable_reset(component)
-            rprint(f"[green]✓ {component} counter reset.[/green]")
+            result = vac.consumable_reset(component)
         except ValueError as e:
             rprint(f"[red]{e}[/red]")
+            raise typer.Exit(1) from e
+        code = extract_code(result)
+        if code != 0:
+            rprint(f"[red]✗ {component} reset rejected by the vacuum (code {code}).[/red]")
+            raise typer.Exit(1)
+        rprint(f"[green]✓ {component} counter reset.[/green]")

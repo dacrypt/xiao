@@ -15,16 +15,10 @@ from xiao.cli import clean, consumables, device, rooms, schedule, settings, setu
 from xiao.cli import doctor as doctor_mod
 from xiao.cli import map as map_cmd
 from xiao.cli._cta import help_epilog, maybe_show_first_run_cta
-from xiao.core.config import (
-    get_cloud_config,
-    get_cloud_session,
-    get_device,
-    get_protocol,
-    is_cloud_mode,
-    save_cloud_session,
-)
-from xiao.core.exit_codes import EXIT_NOT_CONFIGURED, EXIT_TOKEN_EXPIRED
-from xiao.core.vacuum import get_vacuum
+from xiao.core.config import get_cloud_config, harden_permissions, save_cloud_session
+from xiao.core.exit_codes import EXIT_GENERIC, EXIT_NOT_CONFIGURED, EXIT_TOKEN_EXPIRED
+from xiao.core.room_cleaning import extract_code
+from xiao.core.service import XiaoError, build_vacuum
 from xiao.ui.formatters import render_full_status, render_report, render_status
 
 console = Console()
@@ -49,6 +43,7 @@ def _root_callback(ctx: typer.Context) -> None:
             format="[%(levelname)s %(name)s] %(message)s",
         )
 
+    harden_permissions()
     maybe_show_first_run_cta()
 
     if ctx.invoked_subcommand is None:
@@ -91,134 +86,67 @@ def mcp_cmd() -> None:
     run()
 
 
-def _cloud_vacuum():
-    """Get a CloudVacuumService, logging in if needed."""
-    import requests
-    from micloud.miutils import get_random_agent_id
+err_console = Console(stderr=True)
 
-    from xiao.core.cloud import XiaomiCloud
-    from xiao.core.cloud_vacuum import CloudVacuumService
 
-    cloud_cfg = get_cloud_config()
-    username = cloud_cfg.get("username", "")
-    password = cloud_cfg.get("password", "")
-    server = cloud_cfg.get("server", "us")
-    did = cloud_cfg.get("did", "")
-    model = cloud_cfg.get("model", "")
-
-    if not username or not did:
-        rprint("[red]Cloud mode enabled but not configured. Run [bold]xiao setup cloud[/bold].[/red]")
-        raise SystemExit(EXIT_NOT_CONFIGURED)
-
-    def _build_cloud_from_session(sd):
-        c = XiaomiCloud.__new__(XiaomiCloud)
-        c.username = username
-        c.password = password
-        c.user_id = sd["user_id"]
-        c.service_token = sd["service_token"]
-        c.ssecurity = sd["ssecurity"]
-        c.on_status = None
-        aid = get_random_agent_id()
-        ua = f"Android-7.1.1-1.0.0-ONEPLUS A3010-136-{aid} APP/xiaomi.smarthome APPV/62830"
-        c.session = requests.Session()
-        c.session.headers.update({"User-Agent": ua})
-        return c
-
-    # Try to reuse saved session
-    session_data = get_cloud_session()
-    if session_data:
-        cloud = _build_cloud_from_session(session_data)
-    else:
-        # Try browser-based token refresh first (no email verification needed)
-        from xiao.core.token_refresh import refresh_tokens
-
-        rprint("[yellow]No saved session. Refreshing via Chromium CDP session...[/yellow]")
-        tokens = refresh_tokens(username, password)
-        if tokens:
-            save_cloud_session(tokens["userId"], tokens["serviceToken"], tokens["ssecurity"])
-            cloud = _build_cloud_from_session(
-                {
-                    "user_id": tokens["userId"],
-                    "service_token": tokens["serviceToken"],
-                    "ssecurity": tokens["ssecurity"],
-                }
-            )
-            rprint("[green]Tokens refreshed via browser.[/green]")
-        else:
-            # Fall back to full login
-            rprint("[yellow]Browser refresh failed. Trying full login...[/yellow]")
-            cloud = XiaomiCloud(username, password, on_status=lambda m: rprint(f"  [dim]{m}[/dim]"))
-            if not cloud.login():
-                rprint("[red]Cloud login failed.[/red]")
-                raise SystemExit(EXIT_TOKEN_EXPIRED)
-            save_cloud_session(cloud.user_id, cloud.service_token, cloud.ssecurity)
-            rprint("[green]Logged in and session saved.[/green]")
-
-    return CloudVacuumService(cloud, did=did, model=model, country=server)
+def _notify(msg: str) -> None:
+    """Progress messages go to stderr so stdout stays parseable (--json, MCP)."""
+    err_console.print(f"[dim]{msg}[/dim]")
 
 
 def _vacuum():
-    if is_cloud_mode():
-        return _cloud_vacuum()
-    ip, token, model = get_device()
-    protocol = get_protocol()
-    return get_vacuum(ip, token, model, protocol)
+    """Build the configured vacuum service, mapping failures to exit codes."""
+    try:
+        return build_vacuum(notify=_notify)
+    except XiaoError as e:
+        err_console.print(f"[red]{e}[/red]")
+        raise SystemExit(e.exit_code) from e
+
+
+def _report_action(result, success: str, style: str = "green") -> None:
+    """Print success, or print the rejection to stderr and exit non-zero."""
+    code = extract_code(result)
+    if code == 0:
+        rprint(f"[{style}]✓ {success}[/{style}]")
+        return
+    err_console.print(f"[red]✗ Command rejected by the vacuum (code {code}).[/red]")
+    err_console.print(json.dumps(result, indent=2, default=str), markup=False, highlight=False)
+    raise typer.Exit(EXIT_GENERIC)
 
 
 @app.command()
 def start():
-    """Start cleaning."""
-    vac = _vacuum()
-    result = vac.start()
-    if isinstance(result, dict):
-        code = result.get("code", result.get("result", {}).get("code", -1))
-        if code == 0:
-            rprint("[green]✓ Cleaning started.[/green]")
-        else:
-            rprint(f"[yellow]Response: {json.dumps(result, indent=2)}[/yellow]")
-    else:
-        rprint("[green]✓ Cleaning started.[/green]")
+    """Start a full-house clean (the X20+ always washes the mop first)."""
+    _report_action(_vacuum().start(), "Cleaning started.")
 
 
 @app.command()
 def stop():
     """Stop cleaning."""
-    vac = _vacuum()
-    result = vac.stop()
-    if isinstance(result, dict):
-        code = result.get("code", -1)
-        if code == 0:
-            rprint("[yellow]✓ Cleaning stopped.[/yellow]")
-        else:
-            rprint(f"[yellow]Response: {json.dumps(result, indent=2)}[/yellow]")
-    else:
-        rprint("[yellow]✓ Cleaning stopped.[/yellow]")
+    _report_action(_vacuum().stop(), "Cleaning stopped.", style="yellow")
 
 
 @app.command()
 def pause():
-    """Pause cleaning."""
+    """Pause cleaning.
+
+    In cloud mode the X20+ exposes no pause action, so this stops the current
+    job; `xiao start` begins a new one rather than resuming.
+    """
     vac = _vacuum()
     result = vac.pause()
-    if isinstance(result, dict):
-        rprint("[yellow]✓ Cleaning paused.[/yellow]")
+    if getattr(vac, "PAUSE_IS_STOP", False):
+        _report_action(
+            result, "Cleaning stopped (cloud mode has no true pause; `xiao start` starts a new run).", "yellow"
+        )
     else:
-        rprint("[yellow]✓ Cleaning paused.[/yellow]")
+        _report_action(result, "Cleaning paused.", style="yellow")
 
 
 @app.command()
 def dock():
     """Return to charging dock."""
-    vac = _vacuum()
-    result = vac.home()
-    if isinstance(result, dict):
-        code = result.get("code", -1)
-        if code == 0:
-            rprint("[green]✓ Returning to dock.[/green]")
-        else:
-            rprint(f"[yellow]Response: {json.dumps(result, indent=2)}[/yellow]")
-    else:
-        rprint("[green]✓ Returning to dock.[/green]")
+    _report_action(_vacuum().home(), "Returning to dock.")
 
 
 @app.command()
@@ -253,12 +181,7 @@ def status(
 @app.command()
 def find():
     """Make the vacuum beep to locate it."""
-    vac = _vacuum()
-    result = vac.find()
-    if isinstance(result, dict):
-        rprint("[cyan]✓ Beeping...[/cyan]")
-    else:
-        rprint("[cyan]✓ Beeping...[/cyan]")
+    _report_action(_vacuum().find(), "Beeping...", style="cyan")
 
 
 # ── Base station commands ─────────────────────────────────────
@@ -268,12 +191,7 @@ def find():
 def wash():
     """Start mop washing at base station."""
     vac = _vacuum()
-    result = vac.mop_wash()
-    code = _extract_code(result)
-    if code == 0:
-        rprint("[green]✓ Mop washing started.[/green]")
-    else:
-        rprint(f"[yellow]Response: {json.dumps(result, indent=2)}[/yellow]")
+    _report_action(vac.mop_wash(), "Mop washing started.", style="green")
 
 
 @app.command()
@@ -283,43 +201,23 @@ def dry(
     """Start or stop mop drying at base station."""
     vac = _vacuum()
     if stop_dry:
-        result = vac.stop_dry()
-        code = _extract_code(result)
-        if code == 0:
-            rprint("[yellow]✓ Drying stopped.[/yellow]")
-        else:
-            rprint(f"[yellow]Response: {json.dumps(result, indent=2)}[/yellow]")
+        _report_action(vac.stop_dry(), "Drying stopped.", style="yellow")
     else:
-        result = vac.start_dry()
-        code = _extract_code(result)
-        if code == 0:
-            rprint("[green]✓ Drying started.[/green]")
-        else:
-            rprint(f"[yellow]Response: {json.dumps(result, indent=2)}[/yellow]")
+        _report_action(vac.start_dry(), "Drying started.", style="green")
 
 
 @app.command()
 def dust():
     """Start dust collection at base station."""
     vac = _vacuum()
-    result = vac.dust_collect()
-    code = _extract_code(result)
-    if code == 0:
-        rprint("[green]✓ Dust collection started.[/green]")
-    else:
-        rprint(f"[yellow]Response: {json.dumps(result, indent=2)}[/yellow]")
+    _report_action(vac.dust_collect(), "Dust collection started.", style="green")
 
 
 @app.command()
 def eject():
     """Eject base station tray."""
     vac = _vacuum()
-    result = vac.eject_tray()
-    code = _extract_code(result)
-    if code == 0:
-        rprint("[green]✓ Base tray ejected.[/green]")
-    else:
-        rprint(f"[yellow]Response: {json.dumps(result, indent=2)}[/yellow]")
+    _report_action(vac.eject_tray(), "Base tray ejected.", style="green")
 
 
 # ── Report command ────────────────────────────────────────────
@@ -384,7 +282,9 @@ def raw(
     vac = _vacuum()
     parsed = [json.loads(p) if p.startswith(("{", "[")) else p for p in (params or [])]
     result = vac.raw_command(siid, aiid, parsed)
-    rprint(result)
+    sys.stdout.write(json.dumps(result, indent=2, default=str) + "\n")
+    if extract_code(result) != 0:
+        raise typer.Exit(EXIT_GENERIC)
 
 
 @app.command()
@@ -398,39 +298,67 @@ def cloud_login():
 
     if not username:
         rprint("[red]Cloud not configured. Run [bold]xiao setup cloud[/bold] first.[/red]")
-        raise SystemExit(1)
+        raise SystemExit(EXIT_NOT_CONFIGURED)
 
     rprint(f"[cyan]Logging into Xiaomi Cloud as {username}...[/cyan]")
     cloud = XiaomiCloud(username, password, on_status=lambda m: rprint(f"  {m}"))
 
-    if cloud.login():
+    try:
+        ok = cloud.login()
+    except Exception as e:
+        rprint(f"[red]✗ Login failed: {e}[/red]")
+        raise SystemExit(EXIT_TOKEN_EXPIRED) from e
+
+    if ok:
         save_cloud_session(cloud.user_id, cloud.service_token, cloud.ssecurity)
         rprint("[green]✓ Login successful! Session saved.[/green]")
         rprint(f"  userId: {cloud.user_id}")
         rprint(f"  ssecurity: {'yes' if cloud.ssecurity else 'no'}")
     else:
         rprint("[red]✗ Login failed.[/red]")
-        raise SystemExit(1)
+        raise SystemExit(EXIT_TOKEN_EXPIRED)
+
+
+_LOOPBACK = ("127.0.0.1", "localhost", "::1")
 
 
 @app.command()
-def web(port: int = typer.Option(8120, help="Port to serve on")):
+def web(
+    port: int = typer.Option(8120, help="Port to serve on"),
+    host: str = typer.Option(
+        "127.0.0.1",
+        help="Interface to bind. Anything other than localhost exposes vacuum control to the network "
+        "and requires an access token (generated automatically unless --token is given).",
+    ),
+    token: str | None = typer.Option(
+        None,
+        "--token",
+        envvar="XIAO_WEB_TOKEN",
+        help="Require this access token for the API (open the dashboard with ?token=...).",
+    ),
+):
     """Launch the Mission Control web dashboard."""
+    import secrets
+
     import uvicorn
 
     from xiao.dashboard.server import create_app
 
+    loopback = host in _LOOPBACK
+    if not loopback and not token:
+        token = secrets.token_urlsafe(24)
+
+    shown_host = "localhost" if loopback else host
+    url = f"http://{shown_host}:{port}/" + (f"?token={token}" if token else "")
     rprint("[cyan]🤖 XIAOMI X20+ MISSION CONTROL[/cyan]")
-    rprint(f"[dim]Starting dashboard on http://localhost:{port}[/dim]")
-    web_app = create_app()
-    uvicorn.run(web_app, host="0.0.0.0", port=port, log_level="info")
-
-
-def _extract_code(result) -> int:
-    """Pull the response code from a cloud API result."""
-    if isinstance(result, dict):
-        return result.get("code", result.get("result", {}).get("code", -1))
-    return 0
+    rprint(f"[dim]Starting dashboard on[/dim] {url}")
+    if not loopback:
+        rprint(
+            f"[yellow]⚠ Listening on {host}: anyone on this network with the token above can control the "
+            "vacuum. Traffic is plain HTTP.[/yellow]"
+        )
+    web_app = create_app(auth_token=token, loopback_only=loopback)
+    uvicorn.run(web_app, host=host, port=port, log_level="info")
 
 
 def main():

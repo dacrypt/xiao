@@ -5,7 +5,7 @@ from __future__ import annotations
 import typer
 from rich import print as rprint
 
-from xiao.ui.formatters import render_rooms
+from xiao.core.config import get_rooms
 
 app = typer.Typer(no_args_is_help=True)
 
@@ -18,19 +18,23 @@ def _vacuum():
 
 @app.command()
 def rooms():
-    """List available rooms with their IDs."""
-    vac = _vacuum()
-    room_list = vac.rooms()
-    render_rooms(room_list)
+    """List room IDs known to the vacuum (run this before `xiao clean -r`)."""
+    from xiao.cli.rooms import render_known_rooms
+    from xiao.core.room_cleaning import known_rooms
+
+    render_known_rooms(known_rooms(_vacuum(), get_rooms()))
 
 
 @app.command()
 def show():
-    """Show map information."""
+    """Show what the cloud exposes about the map and its rooms."""
+    from xiao.cli.rooms import render_known_rooms
+    from xiao.core.room_cleaning import known_rooms
+
     vac = _vacuum()
-    room_list = vac.rooms()
-    if room_list:
-        rprint(f"[cyan]Map has {len(room_list)} rooms.[/cyan]")
-        render_rooms(room_list)
+    device_rooms = vac.rooms()
+    if device_rooms:
+        rprint(f"[cyan]Device room mapping: {len(device_rooms)} rooms.[/cyan]")
     else:
-        rprint("[yellow]No map data available. Run a full clean first to generate a map.[/yellow]")
+        rprint("[dim]The device exposes no room mapping via the cloud; using schedules and aliases.[/dim]")
+    render_known_rooms(known_rooms(vac, get_rooms()))

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import sys
 
 import typer
 from rich import print as rprint
@@ -45,7 +46,8 @@ def list_schedules(
         return
 
     if as_json:
-        rprint(json.dumps(schedules, indent=2, ensure_ascii=False))
+        # Plain stdout: Rich would treat "[...]" in JSON as markup.
+        sys.stdout.write(json.dumps(schedules, indent=2, ensure_ascii=False) + "\n")
         return
 
     if not schedules:
@@ -90,7 +92,11 @@ def add(
 ):
     """Add a cleaning schedule."""
     vac = _vacuum()
-    vac.timer_add(cron)
+    try:
+        vac.timer_add(cron)
+    except NotImplementedError as e:
+        rprint(f"[red]{e}. Create schedules in the Xiaomi Home app instead.[/red]")
+        raise typer.Exit(1) from e
     rprint(f"[green]Schedule added: {cron}[/green]")
 
 
@@ -100,5 +106,9 @@ def remove(
 ):
     """Remove a cleaning schedule."""
     vac = _vacuum()
-    vac.timer_delete(timer_id)
+    try:
+        vac.timer_delete(timer_id)
+    except NotImplementedError as e:
+        rprint(f"[red]{e}. Remove schedules in the Xiaomi Home app instead.[/red]")
+        raise typer.Exit(1) from e
     rprint(f"[green]Schedule {timer_id} removed.[/green]")

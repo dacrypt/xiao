@@ -141,8 +141,8 @@ class TestExitCodes:
         from xiao.cli.app import app
 
         with (
-            patch("xiao.cli.app.is_cloud_mode", return_value=True),
-            patch("xiao.cli.app.get_cloud_config", return_value={}),
+            patch("xiao.core.config.is_cloud_mode", return_value=True),
+            patch("xiao.core.config.get_cloud_config", return_value={}),
         ):
             result = runner.invoke(app, ["status"])
         assert result.exit_code == 2

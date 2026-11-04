@@ -413,24 +413,6 @@ def render_device_info(data: dict[str, Any]) -> None:
     console.print(Panel(content, title="Device Info", border_style="cyan"))
 
 
-def render_rooms(rooms: list) -> None:
-    if not rooms:
-        console.print("[yellow]No rooms found.[/yellow]")
-        return
-
-    table = Table(title="Rooms", border_style="cyan")
-    table.add_column("ID", style="bold")
-    table.add_column("Name")
-
-    for room in rooms:
-        if isinstance(room, (list, tuple)) and len(room) >= 2:
-            table.add_row(str(room[0]), str(room[1]))
-        else:
-            table.add_row(str(room), "—")
-
-    console.print(table)
-
-
 def render_history(data: dict[str, Any]) -> None:
     lines = []
     for key, value in data.items():

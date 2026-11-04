@@ -19,13 +19,19 @@ session for other tooling.
 
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import json
 import logging
 import os
 import time
+from concurrent.futures import ThreadPoolExecutor
+from typing import TYPE_CHECKING, Any
 
 from xiao.core.config import CONFIG_DIR
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
 
 logger = logging.getLogger(__name__)
 
@@ -35,7 +41,24 @@ LOGIN_SUCCESS_HOSTS = ("home.mi.com", "i.mi.com", "account.xiaomi.com/success")
 
 
 def _ensure_profile_dir() -> None:
-    PROFILE_DIR.mkdir(parents=True, exist_ok=True)
+    PROFILE_DIR.mkdir(mode=0o700, parents=True, exist_ok=True)
+
+
+def run_outside_event_loop[T](fn: Callable[..., T], *args: Any) -> T:
+    """Call a blocking function that uses Playwright's *sync* API.
+
+    Playwright refuses to run its sync API on a thread with a running asyncio
+    loop ("It looks like you are using Playwright Sync API inside the asyncio
+    loop"). The dashboard (FastAPI/uvicorn) and the MCP server both call into
+    xiao from such threads, so in that case the call is moved to a fresh
+    worker thread. From a plain CLI invocation it runs inline.
+    """
+    try:
+        asyncio.get_running_loop()
+    except RuntimeError:
+        return fn(*args)
+    with ThreadPoolExecutor(max_workers=1, thread_name_prefix="xiao-playwright") as pool:
+        return pool.submit(fn, *args).result()
 
 
 def _do_refresh_flow(page, username: str, password: str) -> dict[str, str] | None:
@@ -55,28 +78,31 @@ def _do_refresh_flow(page, username: str, password: str) -> dict[str, str] | Non
     sign = data1.get("_sign", "")
     pwd_hash = hashlib.md5(password.encode()).hexdigest().upper()
 
+    # Credentials are passed as an argument (serialized by Playwright), never
+    # interpolated into the script source — a quote in the username must not
+    # be able to break out of the string and run code on account.xiaomi.com.
     page.evaluate(
-        f"""() => {{
+        """(fields) => {
         const form = document.createElement('form');
         form.method = 'POST';
         form.action = 'https://account.xiaomi.com/pass/serviceLoginAuth2';
-        const fields = {{
-            sid: 'xiaomiio',
-            hash: '{pwd_hash}',
-            callback: 'https://sts.api.io.mi.com/sts',
-            qs: '%3Fsid%3Dxiaomiio%26_json%3Dtrue',
-            user: '{username}',
-            _sign: '{sign}',
-            _json: 'true'
-        }};
-        for (const [k,v] of Object.entries(fields)) {{
+        for (const [k, v] of Object.entries(fields)) {
             const i = document.createElement('input');
             i.type = 'hidden'; i.name = k; i.value = v;
             form.appendChild(i);
-        }}
+        }
         document.body.appendChild(form);
         form.submit();
-    }}"""
+    }""",
+        {
+            "sid": "xiaomiio",
+            "hash": pwd_hash,
+            "callback": "https://sts.api.io.mi.com/sts",
+            "qs": "%3Fsid%3Dxiaomiio%26_json%3Dtrue",
+            "user": username,
+            "_sign": sign,
+            "_json": "true",
+        },
     )
     time.sleep(3)
 
@@ -166,6 +192,10 @@ def refresh_tokens(username: str, password: str) -> dict[str, str] | None:
     `seed_browser_session()` or `xiao setup browser-login` to populate the
     profile, then retry.
     """
+    return run_outside_event_loop(_refresh_tokens_blocking, username, password)
+
+
+def _refresh_tokens_blocking(username: str, password: str) -> dict[str, str] | None:
     cdp_port_env = os.environ.get("XIAO_CDP_PORT", "").strip()
     if cdp_port_env.isdigit():
         via_cdp = _refresh_via_cdp(int(cdp_port_env), username, password)

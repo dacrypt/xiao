@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import contextlib
+import os
+import tempfile
 import tomllib
 from pathlib import Path
 
@@ -12,8 +15,44 @@ CONFIG_DIR = Path(user_config_dir("xiao"))
 CONFIG_FILE = CONFIG_DIR / "config.toml"
 
 
+# config.toml holds the Xiaomi account password and live session tokens, so it
+# (and every other state file xiao writes) is created owner-read/write only.
+PRIVATE_FILE_MODE = 0o600
+PRIVATE_DIR_MODE = 0o700
+
+
 def ensure_config_dir() -> None:
-    CONFIG_DIR.mkdir(parents=True, exist_ok=True)
+    CONFIG_DIR.mkdir(mode=PRIVATE_DIR_MODE, parents=True, exist_ok=True)
+
+
+def write_private_file(path: Path, data: bytes) -> None:
+    """Atomically write ``data`` to ``path`` with 0600 permissions.
+
+    Writes to a temp file in the same directory and renames it over the
+    target, so a concurrent reader (CLI + dashboard) never sees a truncated
+    file and a crash mid-write never corrupts the existing one.
+    """
+    path.parent.mkdir(mode=PRIVATE_DIR_MODE, parents=True, exist_ok=True)
+    fd, tmp_name = tempfile.mkstemp(dir=path.parent, prefix=f".{path.name}.", suffix=".tmp")
+    try:
+        with os.fdopen(fd, "wb") as fh:
+            fh.write(data)
+            fh.flush()
+            os.fsync(fh.fileno())
+        os.chmod(tmp_name, PRIVATE_FILE_MODE)
+        os.replace(tmp_name, path)
+    except BaseException:
+        with contextlib.suppress(OSError):
+            os.unlink(tmp_name)
+        raise
+
+
+def harden_permissions() -> None:
+    """Tighten permissions on config files written by older xiao versions (0644)."""
+    for path in (CONFIG_FILE, TANK_STATE_FILE):
+        with contextlib.suppress(OSError):
+            if path.exists() and path.stat().st_mode & 0o077:
+                os.chmod(path, PRIVATE_FILE_MODE)
 
 
 def load() -> dict:
@@ -24,7 +63,7 @@ def load() -> dict:
 
 def save(config: dict) -> None:
     ensure_config_dir()
-    CONFIG_FILE.write_bytes(tomli_w.dumps(config).encode())
+    write_private_file(CONFIG_FILE, tomli_w.dumps(config).encode())
 
 
 def get_device() -> tuple[str, str, str]:
@@ -39,7 +78,9 @@ def get_device() -> tuple[str, str, str]:
 
         from xiao.core.exit_codes import EXIT_NOT_CONFIGURED
 
-        rprint("[red]No device configured.[/red] Run [bold]xiao setup init[/bold] first.")
+        rprint(
+            "[red]No device configured.[/red] Run [bold]xiao setup cloud[/bold] (or [bold]xiao setup init[/bold] for local mode) first."
+        )
         raise SystemExit(EXIT_NOT_CONFIGURED)
     return ip, token, model or ""
 
@@ -157,7 +198,7 @@ def save_tank_state(state: dict) -> None:
     import json
 
     ensure_config_dir()
-    TANK_STATE_FILE.write_text(json.dumps(state, indent=2))
+    write_private_file(TANK_STATE_FILE, json.dumps(state, indent=2).encode())
 
 
 def reset_tanks(which: str = "both") -> dict:

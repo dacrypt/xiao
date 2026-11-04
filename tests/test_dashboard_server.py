@@ -8,6 +8,11 @@ from fastapi.testclient import TestClient
 from xiao.dashboard.server import create_app
 
 
+def _client(**kwargs) -> TestClient:
+    """A client that looks like the dashboard's own JS on localhost."""
+    return TestClient(create_app(**kwargs), base_url="http://localhost", headers={"X-Xiao-Client": "dashboard"})
+
+
 class TestDashboardSettingsSnapshot:
     def test_settings_snapshot_includes_advanced_vacuum_extend_controls(self):
         mock_vacuum = MagicMock()
@@ -23,7 +28,7 @@ class TestDashboardSettingsSnapshot:
         mock_vacuum.carpet_avoidance.return_value = {"mode": "avoid", "raw": 1}
 
         with patch("xiao.dashboard.server._get_vacuum", return_value=mock_vacuum):
-            client = TestClient(create_app())
+            client = _client()
             response = client.get("/api/settings")
 
         assert response.status_code == 200
@@ -39,7 +44,7 @@ class TestDashboardStatusAlerts:
         mock_vacuum.status.return_value = {"state": "WashingMopPause"}
 
         with patch("xiao.dashboard.server._get_vacuum", return_value=mock_vacuum):
-            client = TestClient(create_app())
+            client = _client()
             response = client.get("/api/status")
 
         assert response.status_code == 200
@@ -76,7 +81,7 @@ class TestDashboardStatusAlerts:
             patch("xiao.core.config.reset_tanks", return_value=reset_state) as mock_reset,
             patch("xiao.core.config.save_tank_state") as mock_save,
         ):
-            client = TestClient(create_app())
+            client = _client()
             response = client.post("/api/tanks/update")
 
         assert response.status_code == 200
@@ -97,7 +102,7 @@ class TestDashboardRoomCleaning:
         ]
 
         with patch("xiao.dashboard.server._get_vacuum", return_value=mock_vacuum):
-            client = TestClient(create_app())
+            client = _client()
             response = client.post("/api/clean/rooms", json={"room_ids": [7]})
 
         assert response.status_code == 200
@@ -123,7 +128,7 @@ class TestDashboardSettingWrites:
         getattr(mock_vacuum, method_name).return_value = [{"code": 0}]
 
         with patch("xiao.dashboard.server._get_vacuum", return_value=mock_vacuum):
-            client = TestClient(create_app())
+            client = _client()
             response = client.post(path, json=payload)
 
         assert response.status_code == 200
@@ -133,8 +138,106 @@ class TestDashboardSettingWrites:
         mock_vacuum = MagicMock()
 
         with patch("xiao.dashboard.server._get_vacuum", return_value=mock_vacuum):
-            client = TestClient(create_app())
+            client = _client()
             response = client.post("/api/settings/clean-rags-tip", json={"minutes": 121})
 
         assert response.status_code == 400
         mock_vacuum.set_clean_rags_tip.assert_not_called()
+
+
+class TestDashboardSecurity:
+    def _vac(self):
+        vac = MagicMock()
+        vac.start.return_value = {"code": 0}
+        vac.status.return_value = {"state": "Idle"}
+        return vac
+
+    def test_rejects_non_loopback_host_header(self):
+        """DNS rebinding: a page on evil.example resolving to 127.0.0.1 sends Host: evil.example."""
+        with patch("xiao.dashboard.server._get_vacuum", return_value=self._vac()):
+            client = TestClient(create_app(), base_url="http://evil.example:8120")
+            assert client.get("/api/status").status_code == 403
+
+    def test_post_requires_dashboard_header(self):
+        vac = self._vac()
+        with patch("xiao.dashboard.server._get_vacuum", return_value=vac):
+            client = TestClient(create_app(), base_url="http://localhost")
+            assert client.post("/api/start").status_code == 403
+        vac.start.assert_not_called()
+
+    def test_post_rejects_cross_origin(self):
+        vac = self._vac()
+        with patch("xiao.dashboard.server._get_vacuum", return_value=vac):
+            response = _client().post("/api/start", headers={"Origin": "https://evil.example"})
+        assert response.status_code == 403
+        vac.start.assert_not_called()
+
+    def test_same_origin_post_succeeds(self):
+        vac = self._vac()
+        with patch("xiao.dashboard.server._get_vacuum", return_value=vac):
+            response = _client().post("/api/start", headers={"Origin": "http://localhost"})
+        assert response.status_code == 200
+        assert response.json()["ok"] is True
+
+    def test_token_required_when_configured(self):
+        vac = self._vac()
+        with patch("xiao.dashboard.server._get_vacuum", return_value=vac):
+            client = _client(auth_token="s3cret", loopback_only=False)
+            assert client.get("/api/status").status_code == 401
+            assert client.get("/api/status", headers={"X-Xiao-Token": "wrong"}).status_code == 401
+            assert client.get("/api/status", headers={"X-Xiao-Token": "s3cret"}).status_code == 200
+            assert client.get("/api/health").status_code == 200
+
+    def test_rejected_action_is_reported_not_ok(self):
+        vac = self._vac()
+        vac.start.return_value = {"code": 0, "result": {"code": -4004}}
+        with patch("xiao.dashboard.server._get_vacuum", return_value=vac):
+            body = _client().post("/api/start").json()
+        assert body["ok"] is False
+        assert body["code"] == -4004
+
+    def test_auth_failure_drops_cached_client(self):
+        from xiao.core.cloud import TokenExpiredError
+        from xiao.dashboard import server
+
+        vac = self._vac()
+        vac.status.side_effect = TokenExpiredError("expired")
+        with (
+            patch("xiao.dashboard.server._get_vacuum", return_value=vac),
+            patch.object(server, "_reset_vacuum") as reset,
+        ):
+            response = _client().get("/api/status")
+        assert response.status_code == 503
+        reset.assert_called_once()
+
+    def test_endpoints_run_off_the_event_loop(self):
+        """Blocking vacuum calls (requests + Playwright sync API) must not run on the loop."""
+        import asyncio
+
+        seen = {}
+        vac = self._vac()
+
+        def _status():
+            try:
+                asyncio.get_running_loop()
+                seen["loop"] = True
+            except RuntimeError:
+                seen["loop"] = False
+            return {"state": "Idle"}
+
+        vac.status.side_effect = _status
+        with patch("xiao.dashboard.server._get_vacuum", return_value=vac):
+            assert _client().get("/api/status").status_code == 200
+        assert seen["loop"] is False
+
+    def test_rooms_come_from_device_not_hardcoded_ids(self):
+        vac = self._vac()
+        vac.rooms.return_value = []
+        vac.schedules_parsed.return_value = [{"room_ids": [5]}]
+        with (
+            patch("xiao.dashboard.server._get_vacuum", return_value=vac),
+            patch("xiao.core.config.get_rooms", return_value={"9": "Kitchen"}),
+        ):
+            rooms = _client().get("/api/rooms").json()
+        assert [r["id"] for r in rooms] == [5, 9]
+        assert rooms[1]["name"] == "Kitchen"
