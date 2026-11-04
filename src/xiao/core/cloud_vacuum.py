@@ -84,8 +84,6 @@ MIOT_SPEC = {
     # siid 18 = mop consumable (read-only)
     "mop_life_level": {"siid": 18, "piid": 1},  # Mop life remaining (%) — READ-ONLY, NOT water level
     "mop_left_time": {"siid": 18, "piid": 2},  # Mop hours remaining
-    # siid 2 = fault
-    "fault": {"siid": 2, "piid": 2},
     # siid 4 = vacuum-extend (Xiaomi-specific service, not standard MIoT)
     "mop_mode": {"siid": 4, "piid": 5},  # mop-mode / water level (1=Low, 2=Medium, 3=High) — WRITABLE
     "waterbox_status": {"siid": 4, "piid": 6},  # waterbox-status (0=No/Detached, 1=Yes/Attached)
@@ -120,6 +118,10 @@ MIOT_ACTIONS = {
 class CloudVacuumService:
     """Control vacuum via Xiaomi Cloud API."""
 
+    # The c102gl spec has no pause action on siid 2, so pause() stops the job.
+    # Surfaces (CLI / MCP / dashboard) read this flag to describe it honestly.
+    PAUSE_IS_STOP = True
+
     def __init__(
         self,
         cloud: XiaomiCloud,
@@ -143,6 +145,7 @@ class CloudVacuumService:
         return cloud_call_action(self.cloud, self.did, a["siid"], a["aiid"], country=self.country)
 
     def pause(self) -> dict:
+        """Stop the current job — see ``PAUSE_IS_STOP``. ``start()`` begins a new run."""
         return self.stop()
 
     def home(self) -> dict:
@@ -308,8 +311,15 @@ class CloudVacuumService:
         )
 
     def spot_clean(self) -> dict:
-        """Start spot cleaning."""
-        return self.start()
+        """Spot cleaning is not exposed by the c102gl cloud spec.
+
+        This used to fall through to ``start()``, which silently launched a
+        full-house clean (with a mop wash) when the user asked for a spot.
+        """
+        raise NotImplementedError(
+            "Spot cleaning is not available via the Xiaomi cloud API for this model. "
+            "Use `xiao clean -z x1,y1,x2,y2` for a small zone instead."
+        )
 
     # ── Volume ────────────────────────────────────────────────────
 
@@ -861,38 +871,41 @@ class CloudVacuumService:
             water_raw = parts[7]
             rooms_str = parts[8]
 
-            # Parse days
-            enabled = enabled_raw == "3"
-            days = []
-            if len(days_str) == 7:
-                for i, ch in enumerate(days_str):
-                    if ch == "1":
-                        days.append(day_names[i])
-            days_display = _format_schedule_days(days)
+            try:
+                # Parse days
+                enabled = enabled_raw == "3"
+                days = []
+                if len(days_str) == 7:
+                    for i, ch in enumerate(days_str):
+                        if ch == "1":
+                            days.append(day_names[i])
+                days_display = _format_schedule_days(days)
 
-            # Parse rooms
-            room_ids = [int(r) for r in rooms_str.split(",") if r.strip()]
-            rooms_display = []
-            for rid in room_ids:
-                alias = room_aliases.get(str(rid))
-                rooms_display.append(f"{alias} ({rid})" if alias else str(rid))
+                # Parse rooms
+                room_ids = [int(r) for r in rooms_str.split(",") if r.strip()]
+                rooms_display = []
+                for rid in room_ids:
+                    alias = room_aliases.get(str(rid))
+                    rooms_display.append(f"{alias} ({rid})" if alias else str(rid))
 
-            schedules.append(
-                {
-                    "id": sched_id,
-                    "enabled": enabled,
-                    "time": time_str,
-                    "days": days,
-                    "days_display": days_display,
-                    "repeat": repeat == "1",
-                    "mode": mode_map.get(int(mode_raw), mode_raw),
-                    "fan": fan_map.get(int(fan_raw), fan_raw),
-                    "water": water_map.get(int(water_raw), water_raw),
-                    "room_ids": room_ids,
-                    "rooms_display": rooms_display,
-                    "raw": entry,
-                }
-            )
+                schedules.append(
+                    {
+                        "id": sched_id,
+                        "enabled": enabled,
+                        "time": time_str,
+                        "days": days,
+                        "days_display": days_display,
+                        "repeat": repeat == "1",
+                        "mode": mode_map.get(int(mode_raw), mode_raw),
+                        "fan": fan_map.get(int(fan_raw), fan_raw),
+                        "water": water_map.get(int(water_raw), water_raw),
+                        "room_ids": room_ids,
+                        "rooms_display": rooms_display,
+                        "raw": entry,
+                    }
+                )
+            except ValueError:
+                schedules.append({"raw": entry, "parse_error": True})
 
         return schedules
 
@@ -944,11 +957,15 @@ class CloudVacuumService:
 
     # ── Room-specific cleaning (MIoT action) ──────────────────────
 
-    def clean_rooms_miot(self, room_ids: list[int]) -> dict:
+    def clean_rooms_miot(self, room_ids: list[int], repeat: int = 1) -> dict:
         """Start room-specific cleaning via MIoT action siid=2, aiid=3.
 
-        The room IDs are passed as a string in piid=4.
+        The room IDs are passed as a string in piid=4. The official action
+        has no repeat-count input, so ``repeat`` is accepted for interface
+        parity but cannot be honoured on this transport.
         """
+        if repeat != 1:
+            logger.info("start-room-sweep has no repeat input; ignoring repeat=%d", repeat)
         a = MIOT_ACTIONS["start_room_sweep"]
         room_str = ",".join(str(r) for r in room_ids)
         return cloud_call_action(

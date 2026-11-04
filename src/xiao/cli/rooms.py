@@ -5,41 +5,52 @@ from __future__ import annotations
 import typer
 from rich import print as rprint
 from rich.console import Console
+from rich.markup import escape
 from rich.table import Table
 
-from xiao.core.config import get_rooms, set_room_alias
+from xiao.core.config import get_rooms, is_configured, resolve_room, set_room_alias
 
 app = typer.Typer(no_args_is_help=False)
 console = Console()
 
 
-@app.callback(invoke_without_command=True)
-def rooms(ctx: typer.Context):
-    """List rooms with IDs and aliases."""
-    if ctx.invoked_subcommand is not None:
+def render_known_rooms(rooms: list[dict]) -> None:
+    """Shared table for `xiao rooms` and `xiao map rooms`."""
+    if not rooms:
+        rprint(
+            "[yellow]No rooms found.[/yellow] The vacuum exposes no room list and no schedule references "
+            "rooms yet. Map the house with a full `xiao start`, then create a schedule in the Xiaomi Home app "
+            'or add aliases with: xiao rooms alias <id> "Name"'
+        )
         return
-
-    room_aliases = get_rooms()
-
-    # Known room IDs from schedules (discovered from device)
-    known_ids: set[int] = {1, 2, 3, 4, 6, 7, 8, 10, 12}
-    # Merge with any aliases that might have other IDs
-    for alias_id in room_aliases:
-        known_ids.add(int(alias_id))
 
     table = Table(title="Rooms", border_style="cyan")
     table.add_column("ID", style="bold", justify="right")
-    table.add_column("Alias", style="cyan")
-
-    for rid in sorted(known_ids):
-        alias = room_aliases.get(str(rid), "[dim]—[/dim]")
-        table.add_row(str(rid), alias)
-
+    table.add_column("Name", style="cyan")
+    table.add_column("Source", style="dim")
+    for room in rooms:
+        table.add_row(str(room["id"]), escape(room["name"]), ", ".join(room["sources"]))
     console.print(table)
 
-    unaliased = [rid for rid in sorted(known_ids) if str(rid) not in room_aliases]
+    unaliased = [r for r in rooms if "alias" not in r["sources"]]
     if unaliased:
         rprint(f'\n[yellow]Tip:[/yellow] {len(unaliased)} rooms without aliases. Use: xiao rooms alias <id> "Name"')
+
+
+@app.callback(invoke_without_command=True)
+def rooms(ctx: typer.Context):
+    """List rooms known to the vacuum (room mapping + schedules) and your aliases."""
+    if ctx.invoked_subcommand is not None:
+        return
+
+    from xiao.core.room_cleaning import known_rooms
+
+    vac = None
+    if is_configured():
+        from xiao.cli.app import _vacuum
+
+        vac = _vacuum()
+    render_known_rooms(known_rooms(vac, get_rooms()))
 
 
 @app.command()
@@ -54,9 +65,14 @@ def alias(
 
 @app.command("rename")
 def rename_room(
-    room_id: int = typer.Argument(help="Room ID"),
+    room: str = typer.Argument(help="Room ID or current alias"),
     name: str = typer.Argument(help="New room name"),
 ):
-    """Rename a room alias (same as `rooms alias`)."""
+    """Rename a room (accepts the numeric ID or its current alias)."""
+    try:
+        room_id = resolve_room(room)
+    except ValueError as e:
+        rprint(f"[red]{e}[/red]")
+        raise typer.Exit(1) from e
     set_room_alias(room_id, name)
     rprint(f'[green]✓ Room {room_id} renamed to "{name}"[/green]')

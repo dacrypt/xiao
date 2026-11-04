@@ -39,7 +39,22 @@ class TestToolDelegation:
         vac = MagicMock()
         vac.start.return_value = {"code": 0}
         with patch.object(mcp_server, "_vac", return_value=vac):
-            assert mcp_server.start_cleaning() == {"code": 0}
+            assert mcp_server.start_cleaning() == {"ok": True, "code": 0}
+
+    def test_rejected_action_reports_not_ok(self):
+        vac = MagicMock()
+        vac.stop.return_value = {"code": 0, "result": {"code": -4004}}
+        with patch.object(mcp_server, "_vac", return_value=vac):
+            assert mcp_server.stop_cleaning() == {"ok": False, "code": -4004}
+
+    def test_pause_reports_stop_semantics_in_cloud_mode(self):
+        vac = MagicMock()
+        vac.PAUSE_IS_STOP = True
+        vac.pause.return_value = {"code": 0}
+        with patch.object(mcp_server, "_vac", return_value=vac):
+            result = mcp_server.pause_cleaning()
+        assert result["ok"] is True
+        assert result["stopped_instead_of_paused"] is True
 
     def test_return_to_dock_calls_home(self):
         vac = MagicMock()
@@ -64,20 +79,23 @@ class TestCleanRoom:
             patch("xiao.core.config.resolve_room", return_value=17),
         ):
             result = mcp_server.clean_room("kitchen")
-        vac.clean_rooms_miot.assert_called_once_with([17])
+        vac.clean_rooms_miot.assert_called_once_with([17], repeat=1)
         vac.clean_rooms.assert_not_called()
-        assert result == {"code": 0}
+        assert result["ok"] is True
+        assert result["code"] == 0
+        assert result["room_id"] == 17
+        assert result["transport"] == "miot"
 
-    def test_falls_back_to_clean_rooms_on_attribute_error(self):
+    def test_falls_back_to_clean_rooms_when_miot_not_implemented(self):
         vac = MagicMock()
-        vac.clean_rooms_miot.side_effect = AttributeError
+        vac.clean_rooms_miot.side_effect = NotImplementedError
         vac.clean_rooms.return_value = {"code": 0}
         with (
             patch.object(mcp_server, "_vac", return_value=vac),
             patch("xiao.core.config.resolve_room", return_value=3),
         ):
             mcp_server.clean_room("bedroom")
-        vac.clean_rooms.assert_called_once_with([3])
+        vac.clean_rooms.assert_called_once_with([3], repeat=1)
 
     def test_surfaces_room_clean_warning_when_command_is_accepted_but_not_verified(self):
         vac = MagicMock()
@@ -99,11 +117,27 @@ class TestCleanRoom:
 
 
 class TestListRooms:
-    def test_returns_id_name_pairs(self):
-        with patch("xiao.core.config.get_rooms", return_value={"17": "kitchen", "3": "bedroom"}):
+    def test_merges_aliases_and_schedule_rooms(self):
+        vac = MagicMock()
+        vac.rooms.return_value = []
+        vac.schedules_parsed.return_value = [{"room_ids": [3, 8]}]
+        with (
+            patch.object(mcp_server, "_vac", return_value=vac),
+            patch("xiao.core.config.get_rooms", return_value={"17": "kitchen", "3": "bedroom"}),
+        ):
+            rooms = {r["id"]: r for r in mcp_server.list_rooms()}
+        assert rooms[17]["name"] == "kitchen"
+        assert rooms[3]["name"] == "bedroom"
+        assert set(rooms[3]["sources"]) == {"schedule", "alias"}
+        assert rooms[8]["name"] == "Room 8"
+
+    def test_lists_aliases_when_vacuum_unavailable(self):
+        with (
+            patch.object(mcp_server, "_vac", side_effect=RuntimeError("offline")),
+            patch("xiao.core.config.get_rooms", return_value={"17": "kitchen"}),
+        ):
             rooms = mcp_server.list_rooms()
-        assert {"id": 17, "name": "kitchen"} in rooms
-        assert {"id": 3, "name": "bedroom"} in rooms
+        assert rooms == [{"id": 17, "name": "kitchen", "sources": ["alias"]}]
 
 
 class TestServerRegistration:
@@ -123,3 +157,44 @@ class TestServerRegistration:
             "list_rooms",
         }
         assert expected.issubset(registered), registered
+
+
+class TestAsyncRegistration:
+    def test_registered_tools_are_async_and_offload(self):
+        """Registered tools must be coroutines so blocking vacuum calls (and
+        Playwright token refresh) never run on the MCP event loop."""
+        import asyncio
+        import threading
+
+        tool = mcp_server.mcp._tool_manager._tools["status"]
+        assert tool.is_async
+
+        main_thread = threading.get_ident()
+        seen = {}
+        vac = MagicMock()
+
+        def _status():
+            seen["thread"] = threading.get_ident()
+            return {"state": "Idle"}
+
+        vac.status.side_effect = _status
+        with patch.object(mcp_server, "_vac", return_value=vac):
+            result = asyncio.run(tool.run({}))
+        assert result == {"state": "Idle"}
+        assert seen["thread"] != main_thread
+
+    def test_nothing_is_printed_to_stdout_while_building_vacuum(self, capsys, monkeypatch):
+        """stdout is the JSON-RPC channel: progress must not leak into it."""
+        from xiao.core import service
+
+        def fake_build(notify=None):
+            notify("No saved session. Refreshing tokens via the browser profile...")
+            return MagicMock()
+
+        monkeypatch.setattr(service, "build_vacuum", fake_build)
+        mcp_server._reset_vac()
+        try:
+            mcp_server._vac()
+        finally:
+            mcp_server._reset_vac()
+        assert capsys.readouterr().out == ""

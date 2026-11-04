@@ -8,17 +8,24 @@ Then extracts cookies to make signed API calls via micloud utils.
 
 from __future__ import annotations
 
+import hashlib
 import json
 import logging
+import os
 import re
+import shutil
 import subprocess
+import sys
 import time
 from typing import TYPE_CHECKING, Any
 
+import requests as req_lib
 from micloud.miutils import (
     decrypt_rc4,
     gen_nonce,
     generate_enc_params,
+    get_random_agent_id,
+    get_random_string,
     signed_nonce,
 )
 
@@ -33,85 +40,119 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 
 
-def _read_verification_code(max_wait: int = 120, poll_interval: int = 8, after_ts: float | None = None) -> str | None:
-    """Poll Gmail via `gog` CLI for a Xiaomi verification code.
+# One alternation so matches come back in document order (latest code last).
+_CODE_RE = re.compile(r"(?:verification code is:?|code:|验证码[：:])\s*(\d{6})", re.IGNORECASE)
 
-    `after_ts` is a Unix timestamp; only codes from emails received after
-    this time are considered (default: now - 5 minutes).
 
-    gog returns threads from the search; we read the thread to get all
-    messages and extract the most recent code.
+def _extract_code_from_text(body: str) -> str | None:
+    """Return the most recent 6-digit Xiaomi verification code in ``body``.
+
+    Only explicit "verification code" phrasings are accepted: a bare 6-digit
+    number could be anything (an order id, a date) and submitting it burns
+    one of Xiaomi's limited verification attempts.
     """
-    if after_ts is None:
-        after_ts = time.time() - 300  # last 5 minutes
+    codes = _CODE_RE.findall(body)
+    return codes[-1] if codes else None
 
+
+def _read_code_via_gog(max_wait: int, poll_interval: int, after_ts: float) -> str | None:
+    """Poll Gmail through the optional `gog` CLI for a Xiaomi verification code.
+
+    Only emails received after ``after_ts`` (Unix seconds) are searched, so a
+    stale code from an earlier login attempt is never reused.
+    """
+    query = f"xiaomi verification after:{int(after_ts)}"
     deadline = time.time() + max_wait
 
     while time.time() < deadline:
         try:
             result = subprocess.run(
-                ["gog", "gmail", "search", "xiaomi verification", "--limit", "3", "--json"],
+                ["gog", "gmail", "search", query, "--limit", "3", "--json"],
                 capture_output=True,
                 text=True,
                 timeout=15,
             )
-            if result.returncode != 0:
+            if result.returncode == 0:
+                data = json.loads(result.stdout)
+                threads = data.get("threads", data) if isinstance(data, dict) else data
+                if threads:
+                    # Threads are newest-first.
+                    thread = threads[0] if isinstance(threads, list) else threads
+                    thread_id = thread.get("id") or thread.get("ID") or ""
+                    read_result = subprocess.run(
+                        ["gog", "gmail", "read", str(thread_id)],
+                        capture_output=True,
+                        text=True,
+                        timeout=15,
+                    )
+                    if read_result.returncode == 0:
+                        code = _extract_code_from_text(read_result.stdout)
+                        if code:
+                            logger.info("Found Xiaomi verification code in Gmail")
+                            return code
+            else:
                 logger.debug("gog search failed: %s", result.stderr)
-                time.sleep(poll_interval)
-                continue
-
-            data = json.loads(result.stdout)
-            threads = data.get("threads", data) if isinstance(data, dict) else data
-            if not threads:
-                time.sleep(poll_interval)
-                continue
-
-            # Read the most recent thread (threads are newest-first)
-            thread = threads[0] if isinstance(threads, list) else threads
-            thread_id = thread.get("id") or thread.get("ID") or ""
-
-            # Read full thread content
-            read_result = subprocess.run(
-                ["gog", "gmail", "read", str(thread_id)],
-                capture_output=True,
-                text=True,
-                timeout=15,
-            )
-            if read_result.returncode != 0:
-                time.sleep(poll_interval)
-                continue
-
-            body = read_result.stdout
-
-            # Extract ALL codes from all messages, pick the last one
-            # (most recent message in thread = most recent code)
-            codes = []
-            for pattern in [
-                r"verification code is:\s*(\d{6})",
-                r"verification code is\s*(\d{6})",
-                r"code:\s*(\d{6})",
-                r"验证码[：:]\s*(\d{6})",
-            ]:
-                codes.extend(re.findall(pattern, body, re.IGNORECASE))
-
-            if codes:
-                # Last match = most recent message's code
-                code = codes[-1]
-                logger.info("Found verification code: %s", code)
-                return code
-
-            # Fallback: last 6-digit number
-            all_6digit = re.findall(r"\b(\d{6})\b", body)
-            if all_6digit:
-                return all_6digit[-1]
-
-        except (subprocess.TimeoutExpired, json.JSONDecodeError, Exception) as e:
+        except (subprocess.TimeoutExpired, json.JSONDecodeError, OSError) as e:
             logger.debug("Error reading verification email: %s", e)
 
         logger.info("Waiting for verification email... %ds remaining", int(deadline - time.time()))
         time.sleep(poll_interval)
 
     return None
+
+
+def _prompt_for_code() -> str | None:
+    """Ask the human for the emailed code (interactive terminals only)."""
+    if not sys.stdin.isatty():
+        return None
+    try:
+        sys.stderr.write("Enter the 6-digit verification code Xiaomi emailed you: ")
+        sys.stderr.flush()
+        code = sys.stdin.readline().strip()
+    except (OSError, KeyboardInterrupt):
+        return None
+    return code if re.fullmatch(r"\d{4,8}", code) else None
+
+
+def _read_verification_code(max_wait: int = 120, poll_interval: int = 8, after_ts: float | None = None) -> str | None:
+    """Obtain the Xiaomi email verification code.
+
+    Uses the optional `gog` Gmail CLI when it is installed (fully automatic),
+    otherwise falls back to prompting on an interactive terminal. Returns None
+    when neither is possible.
+    """
+    if after_ts is None:
+        after_ts = time.time() - 300  # last 5 minutes
+
+    if shutil.which("gog"):
+        code = _read_code_via_gog(max_wait, poll_interval, after_ts)
+        if code:
+            return code
+        logger.info("No code found via gog; falling back to manual entry")
+    return _prompt_for_code()
+
+
+def _debug_screenshot(page, name: str) -> str | None:
+    """Save a login screenshot only when XIAO_DEBUG=1.
+
+    Screenshots of the Xiaomi login flow can show account details, so they go
+    to a private (0700) directory under the config dir — never a predictable,
+    world-readable path in /tmp.
+    """
+    if os.environ.get("XIAO_DEBUG") != "1":
+        return None
+    try:
+        from xiao.core.config import CONFIG_DIR, PRIVATE_DIR_MODE
+
+        debug_dir = CONFIG_DIR / "debug"
+        debug_dir.mkdir(mode=PRIVATE_DIR_MODE, parents=True, exist_ok=True)
+        path = debug_dir / f"{name}.png"
+        page.screenshot(path=str(path))
+        os.chmod(path, 0o600)
+        return str(path)
+    except Exception as e:
+        logger.debug("Could not save debug screenshot: %s", e)
+        return None
 
 
 # ---------------------------------------------------------------------------
@@ -217,9 +258,12 @@ def _playwright_login(
                 send_ts = time.time()
                 code = _read_verification_code(max_wait=120, poll_interval=8, after_ts=send_ts - 60)
                 if not code:
-                    raise RuntimeError("Timed out waiting for verification code in Gmail")
+                    raise RuntimeError(
+                        "No verification code available. Install the `gog` Gmail CLI for automatic "
+                        "retrieval, or run `xiao cloud-login` from an interactive terminal to type it in."
+                    )
 
-                status(f"Got verification code: {code}")
+                status("Got verification code")
 
                 # Find the text input for the code
                 code_input = None
@@ -250,7 +294,7 @@ def _playwright_login(
                     time.sleep(0.5)
                 else:
                     status("WARNING: could not find code input field")
-                    page.screenshot(path="/tmp/xiao_no_code_input.png")
+                    _debug_screenshot(page, "login_no_code_input")
 
                 # Click submit button
                 for submit_text in ["Next", "Verify", "Submit", "OK", "Confirm", "下一步", "确认"]:
@@ -277,12 +321,12 @@ def _playwright_login(
                 time.sleep(3)
 
         # ── Step 6: Extract credentials ───────────────────────────────────
-        page.screenshot(path="/tmp/xiao_login_final.png")
+        final_shot = _debug_screenshot(page, "login_final")
         all_cookies = context.cookies()
         cookie_dict = {c["name"]: c["value"] for c in all_cookies}
 
         status(f"Final URL: {page.url[:80]}")
-        status(f"Cookies present: {list(cookie_dict.keys())}")
+        logger.debug("Cookies present: %s", list(cookie_dict.keys()))
 
         result = {
             "userId": cookie_dict.get("userId", ""),
@@ -304,203 +348,15 @@ def _playwright_login(
             raise RuntimeError(
                 f"Login completed but no serviceToken found in cookies. "
                 f"Present cookies: {list(cookie_dict.keys())}. "
-                f"Debug screenshots: /tmp/xiao_login_final.png"
+                + (f"Debug screenshot: {final_shot}" if final_shot else "Re-run with XIAO_DEBUG=1 for a screenshot.")
             )
 
         return result
 
 
-def _try_fill(page, selectors: list[str], value: str) -> bool:
-    for sel in selectors:
-        try:
-            el = page.locator(sel).first
-            if el.is_visible(timeout=2000):
-                el.fill(value)
-                return True
-        except Exception:
-            continue
-    return False
-
-
-def _try_click(page, selectors: list[str]) -> bool:
-    for sel in selectors:
-        try:
-            el = page.locator(sel).first
-            if el.is_visible(timeout=2000):
-                el.click()
-                return True
-        except Exception:
-            continue
-    return False
-
-
-def _has_captcha(page) -> bool:
-    """Check if the page shows a captcha."""
-    try:
-        for sel in ['img[src*="getCode"]', 'img[src*="captcha"]', ".captcha", "#captcha"]:
-            if page.locator(sel).count() > 0:
-                return True
-        # Check page text
-        text = page.inner_text("body")[:1000].lower()
-        if "验证码" in text or "captcha" in text:
-            return True
-    except Exception:
-        pass
-    return False
-
-
-def _has_verification(page) -> bool:
-    """Check if the page shows email/identity verification."""
-    try:
-        text = page.inner_text("body")[:2000].lower()
-        indicators = ["verify", "verification", "验证", "identity", "send code", "email"]
-        return any(ind in text for ind in indicators)
-    except Exception:
-        return False
-
-
-def _handle_captcha(page, status: Callable[[str], Any]) -> None:
-    """Attempt to handle image captcha. Uses OCR or skips if not solvable."""
-    # Take screenshot of captcha area
-    try:
-        captcha_img = page.locator('img[src*="getCode"], img[src*="captcha"]').first
-        if captcha_img.is_visible(timeout=3000):
-            captcha_img.screenshot(path="/tmp/xiao_captcha_img.png")
-            status("Captcha image saved to /tmp/xiao_captcha_img.png")
-
-            # Try to solve using tesseract if available
-            try:
-                result = subprocess.run(
-                    ["tesseract", "/tmp/xiao_captcha_img.png", "stdout", "--psm", "7"],
-                    capture_output=True,
-                    text=True,
-                    timeout=10,
-                )
-                if result.returncode == 0:
-                    captcha_text = result.stdout.strip().replace(" ", "")
-                    if captcha_text and len(captcha_text) >= 3:
-                        status(f"OCR captcha result: {captcha_text}")
-                        # Fill the captcha input
-                        _try_fill(
-                            page,
-                            [
-                                'input[name="icode"]',
-                                'input[name="captcha"]',
-                                'input[placeholder*="验证"]',
-                                'input[placeholder*="code"]',
-                            ],
-                            captcha_text,
-                        )
-                        # Re-submit
-                        _try_click(
-                            page,
-                            [
-                                'button[type="submit"]',
-                                'input[type="submit"]',
-                                'button:has-text("Sign in")',
-                                'button:has-text("登录")',
-                            ],
-                        )
-                        return
-            except FileNotFoundError:
-                status("tesseract not available for OCR")
-
-    except Exception as e:
-        logger.debug("Captcha handling error: %s", e)
-
-    status("Could not auto-solve captcha. Will try alternative login method.")
-
-
-def _handle_email_verification(page, status: Callable[[str], Any]) -> bool:
-    """Handle email verification flow in the browser."""
-    # Click send/verify button
-    status("Looking for 'Send code' button...")
-    clicked = _try_click(
-        page,
-        [
-            'button:has-text("Send")',
-            'button:has-text("send")',
-            'button:has-text("发送")',
-            'a:has-text("Send")',
-            'button:has-text("Get")',
-            'button:has-text("Verify")',
-            'button:has-text("verify")',
-            '[class*="send"]',
-        ],
-    )
-
-    if clicked:
-        status("Clicked send code button, waiting for email...")
-    else:
-        status("No send button found, code may have been auto-sent...")
-
-    time.sleep(5)
-
-    # Read code from Gmail
-    code = _read_verification_code(max_wait=120, poll_interval=8)
-    if not code:
-        status("Failed to get verification code from email")
-        return False
-
-    status(f"Got verification code: {code}")
-
-    # Enter code
-    filled = _try_fill(
-        page,
-        [
-            'input[type="text"]',
-            'input[type="number"]',
-            'input[type="tel"]',
-            'input[placeholder*="code"]',
-            'input[placeholder*="验证"]',
-            'input[name*="code"]',
-            'input[class*="code"]',
-        ],
-        code,
-    )
-
-    if not filled:
-        # Try individual digit inputs
-        digit_inputs = page.locator("input:visible").all()
-        if len(digit_inputs) >= 6:
-            for i, digit in enumerate(code[:6]):
-                try:
-                    digit_inputs[i].fill(digit)
-                except Exception:
-                    break
-            filled = True
-
-    if not filled:
-        status("Could not find code input field")
-        page.screenshot(path="/tmp/xiao_verification_no_input.png")
-        return False
-
-    # Submit
-    _try_click(
-        page,
-        [
-            'button:has-text("Submit")',
-            'button:has-text("Verify")',
-            'button:has-text("Next")',
-            'button:has-text("OK")',
-            'button:has-text("确认")',
-            'button:has-text("下一步")',
-            'button[type="submit"]',
-        ],
-    )
-
-    time.sleep(5)
-    return True
-
-
 # ---------------------------------------------------------------------------
 # Hybrid approach: API login with Playwright fallback for captcha
 # ---------------------------------------------------------------------------
-
-import hashlib
-
-import requests as req_lib
-from micloud.miutils import get_random_agent_id, get_random_string
 
 
 def _make_session() -> req_lib.Session:
@@ -524,6 +380,21 @@ class XiaomiCloud:
         self.service_token: str | None = None
         self.ssecurity: str | None = None
         self.session = _make_session()
+
+    @classmethod
+    def from_session(
+        cls,
+        username: str,
+        password: str,
+        session: dict[str, str],
+        on_status: Callable[[str], Any] | None = None,
+    ) -> XiaomiCloud:
+        """Rebuild a logged-in client from a saved ``{user_id, service_token, ssecurity}`` session."""
+        cloud = cls(username, password, on_status=on_status)
+        cloud.user_id = session.get("user_id") or None
+        cloud.service_token = session.get("service_token") or None
+        cloud.ssecurity = session.get("ssecurity") or None
+        return cloud
 
     def _status(self, msg: str):
         logger.info(msg)
@@ -608,7 +479,9 @@ class XiaomiCloud:
 
     def _browser_login(self) -> bool:
         """Full browser-based login with captcha + 2FA handling."""
-        creds = _playwright_login(self.username, self.password, self.on_status)
+        from xiao.core.token_refresh import run_outside_event_loop
+
+        creds = run_outside_event_loop(_playwright_login, self.username, self.password, self.on_status)
         self.user_id = creds.get("userId", "")
         self.service_token = creds.get("serviceToken", "")
         self.ssecurity = creds.get("ssecurity", "")

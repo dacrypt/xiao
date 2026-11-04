@@ -4,7 +4,7 @@
 
 Key facts:
 - Cloud-only: this vacuum model has no local control — all commands go through Xiaomi Cloud with RC4-signed MIoT requests.
-- Tokens expire every ~6-8h. Auto-refresh reuses a persistent Chromium session on CDP port 18800.
+- Tokens expire every ~6-8h. Auto-refresh reuses xiao's private Chromium profile (seeded once with `xiao setup browser-login`); `XIAO_CDP_PORT` optionally points it at an existing Chromium.
 - `xiao` is a CLI first; the Mission Control dashboard and REST API are thin wrappers over the same core.
 
 ## Docs

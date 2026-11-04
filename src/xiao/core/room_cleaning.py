@@ -36,9 +36,38 @@ ROOM_CLEAN_IDLE_STATES = {
 
 
 def extract_code(result: Any) -> int:
+    """Normalize a Xiaomi cloud / miIO response to a single status code.
+
+    - ``{"code": 0, "result": {"code": -4004}}`` → ``-4004``: the outer code is
+      the cloud transport, the nested one is what the device itself answered.
+    - ``{"result": {"code": 7}}`` → ``7``; a dict without any code → ``-1``.
+    - ``[{"code": 0}, {"code": -4001}]`` (property set/get) → first non-zero.
+    - ``None`` / anything else (local miIO calls return nothing) → ``0``.
+    """
     if isinstance(result, dict):
-        return result.get("code", result.get("result", {}).get("code", -1))
+        nested = result.get("result")
+        nested_code = nested.get("code") if isinstance(nested, dict) else None
+        if "code" in result:
+            outer = _as_int(result.get("code"))
+            if outer == 0 and nested_code is not None:
+                return _as_int(nested_code)
+            return outer
+        return _as_int(nested_code) if nested_code is not None else -1
+    if isinstance(result, list):
+        for item in result:
+            if isinstance(item, dict):
+                code = _as_int(item.get("code", 0))
+                if code != 0:
+                    return code
+        return 0
     return 0
+
+
+def _as_int(value: Any) -> int:
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return -1
 
 
 def start_room_clean(
@@ -61,10 +90,19 @@ def start_room_clean(
     status_before = _safe_status(vac)
     before_state = _status_state(status_before)
 
-    transport = "miot"
-    try:
-        result = vac.clean_rooms_miot(room_ids)
-    except (AttributeError, Exception):
+    # Prefer the official MIoT action; fall back to the legacy RPC only when the
+    # service doesn't implement it. Any other error (timeout, auth, rejected
+    # params) is re-raised: the first command may already have reached the
+    # robot, and blindly sending a second, different command is unsafe.
+    clean_rooms_miot = getattr(vac, "clean_rooms_miot", None)
+    if callable(clean_rooms_miot):
+        transport = "miot"
+        try:
+            result = clean_rooms_miot(room_ids, repeat=repeat)
+        except NotImplementedError:
+            transport = "cloud_rpc"
+            result = vac.clean_rooms(room_ids, repeat=repeat)
+    else:
         transport = "cloud_rpc"
         result = vac.clean_rooms(room_ids, repeat=repeat)
 
@@ -119,6 +157,7 @@ def _verify_room_clean_started(
     sleep_fn: Callable[[float], None],
 ) -> tuple[bool | None, dict[str, Any] | None]:
     saw_status = False
+    last_state = ""
     latest_status: dict[str, Any] | None = None
 
     for attempt in range(max(1, poll_attempts)):
@@ -131,12 +170,15 @@ def _verify_room_clean_started(
         state = _status_state(latest_status)
         if not state:
             continue
+        last_state = state
         if _state_shows_room_clean_progress(state):
             return True, latest_status
 
-    if not saw_status:
-        return None, latest_status
-    return False, latest_status
+    # Only a robot that is still visibly at rest counts as "did not start";
+    # an unknown/unrecognised final state is inconclusive.
+    if saw_status and last_state in ROOM_CLEAN_IDLE_STATES:
+        return False, latest_status
+    return None, latest_status
 
 
 def _safe_status(vac: Any) -> dict[str, Any] | None:
@@ -161,4 +203,57 @@ def _state_is_busy(state: str) -> bool:
 
 
 def _state_shows_room_clean_progress(state: str) -> bool:
-    return bool(state) and (state in ROOM_CLEAN_IN_PROGRESS_STATES or state not in ROOM_CLEAN_IDLE_STATES)
+    # Only known working states count as proof of movement. An unrecognised
+    # state (e.g. "Unknown(17)") must not be reported as a verified start.
+    return state in ROOM_CLEAN_IN_PROGRESS_STATES
+
+
+def known_rooms(vac: Any | None, aliases: dict[str, str]) -> list[dict[str, Any]]:
+    """Collect the room IDs this vacuum actually knows about.
+
+    Sources, merged: the device room mapping (when the model exposes one),
+    room IDs referenced by the device's own schedules, and the user's aliases.
+    Room IDs are per-map, so nothing here is hard-coded.
+
+    Returns ``[{"id": int, "name": str, "sources": [...]}, ...]`` sorted by id.
+    """
+    rooms: dict[int, dict[str, Any]] = {}
+
+    def add(rid: Any, source: str, name: str | None = None) -> None:
+        try:
+            room_id = int(rid)
+        except (TypeError, ValueError):
+            return
+        entry = rooms.setdefault(room_id, {"id": room_id, "name": None, "sources": []})
+        if source not in entry["sources"]:
+            entry["sources"].append(source)
+        if name and not entry["name"]:
+            entry["name"] = str(name)
+
+    if vac is not None:
+        try:
+            for room in vac.rooms() or []:
+                if isinstance(room, (list, tuple)) and room:
+                    add(room[0], "device", room[1] if len(room) > 1 else None)
+                elif isinstance(room, dict):
+                    add(room.get("id"), "device", room.get("name"))
+                else:
+                    add(room, "device")
+        except Exception:
+            pass
+        try:
+            for sched in vac.schedules_parsed() or []:
+                for rid in sched.get("room_ids", []) if isinstance(sched, dict) else []:
+                    add(rid, "schedule")
+        except Exception:
+            pass
+
+    for rid in aliases:
+        add(rid, "alias")
+
+    result = []
+    for room_id in sorted(rooms):
+        entry = rooms[room_id]
+        entry["name"] = aliases.get(str(room_id)) or entry["name"] or f"Room {room_id}"
+        result.append(entry)
+    return result

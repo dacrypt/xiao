@@ -3,16 +3,19 @@
 from __future__ import annotations
 
 import contextlib
+import hmac
 import logging
+import threading
 import time
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
+from urllib.parse import urlsplit
 
-from fastapi import FastAPI, HTTPException
-from fastapi.responses import FileResponse
-from pydantic import BaseModel
+from fastapi import FastAPI, HTTPException, Request
+from fastapi.responses import FileResponse, JSONResponse
+from pydantic import BaseModel, Field
 
-from xiao.core.room_cleaning import start_room_clean
+from xiao.core.room_cleaning import extract_code, start_room_clean
 
 logger = logging.getLogger(__name__)
 
@@ -25,6 +28,10 @@ class SpeedRequest(BaseModel):
 
 class VolumeRequest(BaseModel):
     level: int  # 0-100
+
+
+class TankResetRequest(BaseModel):
+    which: Literal["clean", "dirty", "both"] = "both"
 
 
 class DNDRequest(BaseModel):
@@ -50,7 +57,7 @@ class WaterRequest(BaseModel):
 
 
 class RoomCleanRequest(BaseModel):
-    room_ids: list[int]
+    room_ids: list[int] = Field(min_length=1)
     fan: str | None = None  # silent, standard, medium, turbo
     water: str | None = None  # low, medium, high
 
@@ -58,25 +65,54 @@ class RoomCleanRequest(BaseModel):
 # ── Vacuum singleton ─────────────────────────────────────────────
 
 _vacuum_instance = None
+_vacuum_lock = threading.Lock()
 
 
 def _get_vacuum():
-    """Lazy-init the vacuum service (reuse across requests)."""
+    """Lazy-init the vacuum service (reuse across requests).
+
+    Endpoints are plain ``def`` functions, so FastAPI runs them in its
+    threadpool; the lock keeps concurrent first requests from logging in
+    several times in parallel.
+    """
     global _vacuum_instance
     if _vacuum_instance is None:
-        from xiao.cli.app import _vacuum
+        with _vacuum_lock:
+            if _vacuum_instance is None:
+                from xiao.core.service import build_vacuum
 
-        _vacuum_instance = _vacuum()
+                _vacuum_instance = build_vacuum(notify=lambda m: logger.info("%s", m))
     return _vacuum_instance
 
 
 def _reset_vacuum():
     """Force re-creation on next call (e.g. after auth failure)."""
     global _vacuum_instance
-    _vacuum_instance = None
+    with _vacuum_lock:
+        _vacuum_instance = None
 
 
-# ── App factory ───────────────────────────────────────────────────
+def _is_auth_error(exc: BaseException) -> bool:
+    from xiao.core.cloud import TokenExpiredError
+    from xiao.core.service import CloudAuthError
+
+    return isinstance(exc, (TokenExpiredError, CloudAuthError))
+
+
+def _action_response(result: Any, **extra: Any) -> dict[str, Any]:
+    code = extract_code(result)
+    return {"ok": code == 0, "code": code, **extra, "result": result}
+
+
+_LOOPBACK_HOSTS = {"localhost", "127.0.0.1", "::1", "[::1]"}
+
+
+def _host_only(value: str) -> str:
+    """Strip the port from a Host header / URL netloc."""
+    value = value.strip().lower()
+    if value.startswith("["):
+        return value.split("]", 1)[0] + "]"
+    return value.rsplit(":", 1)[0] if value.count(":") == 1 else value
 
 
 def _is_state_21_pause(state: Any) -> bool:
@@ -88,27 +124,79 @@ def _state_21_alert(cta: str) -> str:
     return f"⚠️ Washing mop paused. Check clean water (refill) and dirty water (empty), then {cta}."
 
 
-def create_app() -> FastAPI:
+def create_app(*, auth_token: str | None = None, loopback_only: bool = True) -> FastAPI:
+    """Build the dashboard app.
+
+    Security model (the API can start the robot and change settings):
+      - ``loopback_only``: reject requests whose Host header isn't localhost,
+        which blocks DNS-rebinding attacks from web pages the user visits.
+      - State-changing requests must come from the same origin and carry the
+        ``X-Xiao-Client`` header that only the dashboard's own JS sends, so a
+        cross-site form or fetch can't drive the vacuum (CSRF).
+      - ``auth_token``: when set, every ``/api/*`` call except health needs it
+        (``X-Xiao-Token`` header). Required when binding beyond localhost.
+    """
     app = FastAPI(title="Xiaomi X20+ Mission Control", version="2.0.0")
+
+    @app.middleware("http")
+    async def _guard(request: Request, call_next):
+        host = _host_only(request.headers.get("host", ""))
+        if loopback_only and host not in _LOOPBACK_HOSTS:
+            return JSONResponse({"detail": "Host not allowed"}, status_code=403)
+
+        path = request.url.path
+        if path.startswith("/api/") and path != "/api/health":
+            if auth_token:
+                supplied = request.headers.get("x-xiao-token", "")
+                if not hmac.compare_digest(supplied, auth_token):
+                    return JSONResponse({"detail": "Missing or invalid dashboard token"}, status_code=401)
+            if request.method not in ("GET", "HEAD", "OPTIONS"):
+                origin = request.headers.get("origin")
+                if origin and _host_only(urlsplit(origin).netloc) != host:
+                    return JSONResponse({"detail": "Cross-origin request rejected"}, status_code=403)
+                if request.headers.get("x-xiao-client") != "dashboard":
+                    return JSONResponse({"detail": "Missing X-Xiao-Client header"}, status_code=403)
+
+        try:
+            return await call_next(request)
+        except Exception:  # pragma: no cover - endpoints already map errors
+            logger.exception("unhandled dashboard error")
+            return JSONResponse({"detail": "Internal error"}, status_code=500)
+
+    @app.exception_handler(HTTPException)
+    async def _http_error(request: Request, exc: HTTPException):
+        # Endpoints wrap failures as HTTPException(500, ...) with the original
+        # exception chained; drop the cached client after auth failures so the
+        # next request logs in / refreshes tokens again.
+        cause = exc.__cause__
+        if cause is not None and _is_auth_error(cause):
+            _reset_vacuum()
+            return JSONResponse({"detail": str(cause), "auth": True}, status_code=503)
+        if cause is not None:
+            from xiao.core.service import XiaoError
+
+            if isinstance(cause, XiaoError):
+                return JSONResponse({"detail": str(cause)}, status_code=503)
+        return JSONResponse({"detail": exc.detail}, status_code=exc.status_code)
 
     # ── Static frontend ──────────────────────────────────────────
 
     index_html = Path(__file__).parent / "index.html"
 
     @app.get("/", response_class=FileResponse)
-    async def root():
+    def root():
         return FileResponse(index_html, media_type="text/html")
 
     # ── Health ───────────────────────────────────────────────────
 
     @app.get("/api/health")
-    async def health():
+    def health():
         return {"status": "ok", "ts": int(time.time())}
 
     # ── Status ───────────────────────────────────────────────────
 
     @app.get("/api/status")
-    async def status():
+    def status():
         try:
             vac = _get_vacuum()
             data = vac.status()
@@ -131,7 +219,7 @@ def create_app() -> FastAPI:
     # ── Full status ──────────────────────────────────────────────
 
     @app.get("/api/status/full")
-    async def full_status():
+    def full_status():
         try:
             vac = _get_vacuum()
             data = vac.full_status()
@@ -143,7 +231,7 @@ def create_app() -> FastAPI:
     # ── Live status (lightweight, frequent polling) ─────────────
 
     @app.get("/api/status/live")
-    async def status_live():
+    def status_live():
         try:
             vac = _get_vacuum()
             data = vac.status()
@@ -165,7 +253,7 @@ def create_app() -> FastAPI:
     # ── Consumables ──────────────────────────────────────────────
 
     @app.get("/api/consumables")
-    async def consumables():
+    def consumables():
         try:
             vac = _get_vacuum()
             raw = vac.consumable_status()
@@ -206,7 +294,7 @@ def create_app() -> FastAPI:
     # ── Device info ──────────────────────────────────────────────
 
     @app.get("/api/device")
-    async def device_info():
+    def device_info():
         try:
             vac = _get_vacuum()
             data = vac.device_info()
@@ -218,7 +306,7 @@ def create_app() -> FastAPI:
     # ── History ──────────────────────────────────────────────────
 
     @app.get("/api/history")
-    async def history():
+    def history():
         try:
             vac = _get_vacuum()
             data = vac.clean_history()
@@ -230,7 +318,7 @@ def create_app() -> FastAPI:
     # ── Settings (read) ──────────────────────────────────────────
 
     @app.get("/api/settings")
-    async def settings_get():
+    def settings_get():
         try:
             vac = _get_vacuum()
             dnd = vac.dnd_status()
@@ -276,23 +364,19 @@ def create_app() -> FastAPI:
     # ── Rooms ────────────────────────────────────────────────────
 
     @app.get("/api/rooms")
-    async def rooms_list():
+    def rooms_list():
         from xiao.core.config import get_rooms
+        from xiao.core.room_cleaning import known_rooms
 
-        aliases = get_rooms()
-        # Known room IDs from device schedules
-        known_ids: set[int] = {1, 2, 3, 4, 6, 7, 8, 10, 12}
-        for alias_id in aliases:
-            known_ids.add(int(alias_id))
-        rooms = []
-        for rid in sorted(known_ids):
-            rooms.append({"id": rid, "name": aliases.get(str(rid), f"Room {rid}")})
-        return rooms
+        vac = None
+        with contextlib.suppress(Exception):
+            vac = _get_vacuum()
+        return known_rooms(vac, get_rooms())
 
     # ── Schedules ────────────────────────────────────────────────
 
     @app.get("/api/schedules")
-    async def schedules_list():
+    def schedules_list():
         try:
             vac = _get_vacuum()
             scheds = vac.schedules_parsed()
@@ -304,7 +388,7 @@ def create_app() -> FastAPI:
     # ── Water level ──────────────────────────────────────────────
 
     @app.get("/api/water")
-    async def water_get():
+    def water_get():
         try:
             vac = _get_vacuum()
             return vac.water_level()
@@ -313,11 +397,11 @@ def create_app() -> FastAPI:
             raise HTTPException(500, detail=str(e)) from e
 
     @app.post("/api/water")
-    async def water_set(req: WaterRequest):
+    def water_set(req: WaterRequest):
         try:
             vac = _get_vacuum()
             result = vac.set_water_level(req.level)
-            return {"ok": True, "level": req.level, "result": result}
+            return _action_response(result, level=req.level)
         except ValueError as e:
             raise HTTPException(400, detail=str(e)) from e
         except Exception as e:
@@ -327,7 +411,7 @@ def create_app() -> FastAPI:
     # ── Network info ─────────────────────────────────────────
 
     @app.get("/api/network")
-    async def network_info():
+    def network_info():
         try:
             vac = _get_vacuum()
             return vac.network_info()
@@ -338,7 +422,7 @@ def create_app() -> FastAPI:
     # ── All properties ───────────────────────────────────────
 
     @app.get("/api/all-properties")
-    async def all_properties():
+    def all_properties():
         try:
             vac = _get_vacuum()
             return vac.all_properties()
@@ -349,44 +433,37 @@ def create_app() -> FastAPI:
     # ── Control actions ──────────────────────────────────────────
 
     @app.post("/api/start")
-    async def start_clean():
+    def start_clean():
         try:
             vac = _get_vacuum()
-            result = vac.start()
-            code = _extract_code(result)
-            return {"ok": code == 0, "result": result}
+            return _action_response(vac.start())
         except Exception as e:
             logger.exception("start failed")
             raise HTTPException(500, detail=str(e)) from e
 
     @app.post("/api/stop")
-    async def stop_clean():
+    def stop_clean():
         try:
             vac = _get_vacuum()
-            result = vac.stop()
-            code = _extract_code(result)
-            return {"ok": code == 0, "result": result}
+            return _action_response(vac.stop())
         except Exception as e:
             logger.exception("stop failed")
             raise HTTPException(500, detail=str(e)) from e
 
     @app.post("/api/dock")
-    async def dock():
+    def dock():
         try:
             vac = _get_vacuum()
-            result = vac.home()
-            code = _extract_code(result)
-            return {"ok": code == 0, "result": result}
+            return _action_response(vac.home())
         except Exception as e:
             logger.exception("dock failed")
             raise HTTPException(500, detail=str(e)) from e
 
     @app.post("/api/find")
-    async def find():
+    def find():
         try:
             vac = _get_vacuum()
-            result = vac.find()
-            return {"ok": True, "result": result}
+            return _action_response(vac.find())
         except Exception as e:
             logger.exception("find failed")
             raise HTTPException(500, detail=str(e)) from e
@@ -394,17 +471,24 @@ def create_app() -> FastAPI:
     # ── Room cleaning ────────────────────────────────────────────
 
     @app.post("/api/clean/rooms")
-    async def clean_rooms(req: RoomCleanRequest):
+    def clean_rooms(req: RoomCleanRequest):
         try:
             vac = _get_vacuum()
-            # Set fan/water if requested
+            # Fan/water are best-effort (some fields are only writable off-dock).
+            notes = []
             if req.fan:
-                vac.set_fan_speed(req.fan)
+                fan_code = extract_code(vac.set_fan_speed(req.fan))
+                if fan_code != 0:
+                    notes.append(f"fan speed change rejected (code {fan_code})")
             if req.water:
-                vac.set_water_level(req.water)
+                water_code = extract_code(vac.set_water_level(req.water))
+                if water_code != 0:
+                    notes.append(f"water level change rejected (code {water_code})")
             clean_result = start_room_clean(vac, req.room_ids)
             return {
                 "ok": clean_result["accepted"],
+                "code": clean_result["code"],
+                "notes": notes,
                 "rooms": req.room_ids,
                 "result": clean_result["result"],
                 "verified_started": clean_result["verified_started"],
@@ -418,56 +502,46 @@ def create_app() -> FastAPI:
     # ── Base station controls ────────────────────────────────────
 
     @app.post("/api/wash")
-    async def wash():
+    def wash():
         try:
             vac = _get_vacuum()
-            result = vac.mop_wash()
-            code = _extract_code(result)
-            return {"ok": code == 0, "result": result}
+            return _action_response(vac.mop_wash())
         except Exception as e:
             logger.exception("wash failed")
             raise HTTPException(500, detail=str(e)) from e
 
     @app.post("/api/dry")
-    async def dry():
+    def dry():
         try:
             vac = _get_vacuum()
-            result = vac.start_dry()
-            code = _extract_code(result)
-            return {"ok": code == 0, "result": result}
+            return _action_response(vac.start_dry())
         except Exception as e:
             logger.exception("dry failed")
             raise HTTPException(500, detail=str(e)) from e
 
     @app.post("/api/dry/stop")
-    async def dry_stop():
+    def dry_stop():
         try:
             vac = _get_vacuum()
-            result = vac.stop_dry()
-            code = _extract_code(result)
-            return {"ok": code == 0, "result": result}
+            return _action_response(vac.stop_dry())
         except Exception as e:
             logger.exception("dry stop failed")
             raise HTTPException(500, detail=str(e)) from e
 
     @app.post("/api/dust")
-    async def dust():
+    def dust():
         try:
             vac = _get_vacuum()
-            result = vac.dust_collect()
-            code = _extract_code(result)
-            return {"ok": code == 0, "result": result}
+            return _action_response(vac.dust_collect())
         except Exception as e:
             logger.exception("dust failed")
             raise HTTPException(500, detail=str(e)) from e
 
     @app.post("/api/eject")
-    async def eject():
+    def eject():
         try:
             vac = _get_vacuum()
-            result = vac.eject_tray()
-            code = _extract_code(result)
-            return {"ok": code == 0, "result": result}
+            return _action_response(vac.eject_tray())
         except Exception as e:
             logger.exception("eject failed")
             raise HTTPException(500, detail=str(e)) from e
@@ -475,7 +549,7 @@ def create_app() -> FastAPI:
     # ── Settings (write) ─────────────────────────────────────────
 
     @app.post("/api/settings/speed")
-    async def set_speed(req: SpeedRequest):
+    def set_speed(req: SpeedRequest):
         try:
             vac = _get_vacuum()
             speed_names = {0: "silent", 1: "standard", 2: "medium", 3: "turbo"}
@@ -483,7 +557,7 @@ def create_app() -> FastAPI:
             if name is None:
                 raise HTTPException(400, detail="level must be 0-3")
             result = vac.set_fan_speed(name)
-            return {"ok": True, "level": req.level, "name": name, "result": result}
+            return _action_response(result, level=req.level, name=name)
         except HTTPException:
             raise
         except Exception as e:
@@ -491,13 +565,13 @@ def create_app() -> FastAPI:
             raise HTTPException(500, detail=str(e)) from e
 
     @app.post("/api/settings/volume")
-    async def set_volume(req: VolumeRequest):
+    def set_volume(req: VolumeRequest):
         try:
             vac = _get_vacuum()
             if not (0 <= req.level <= 100):
                 raise HTTPException(400, detail="level must be 0-100")
             result = vac.set_volume(req.level)
-            return {"ok": True, "level": req.level, "result": result}
+            return _action_response(result, level=req.level)
         except HTTPException:
             raise
         except Exception as e:
@@ -505,61 +579,61 @@ def create_app() -> FastAPI:
             raise HTTPException(500, detail=str(e)) from e
 
     @app.post("/api/settings/dnd")
-    async def set_dnd(req: DNDRequest):
+    def set_dnd(req: DNDRequest):
         try:
             vac = _get_vacuum()
             result = vac.set_dnd(req.enabled, req.start, req.end)
-            return {"ok": True, "enabled": req.enabled, "result": result}
+            return _action_response(result, enabled=req.enabled)
         except Exception as e:
             logger.exception("set DND failed")
             raise HTTPException(500, detail=str(e)) from e
 
     @app.post("/api/settings/resume-after-charge")
-    async def set_resume_after_charge(req: ToggleSettingRequest):
+    def set_resume_after_charge(req: ToggleSettingRequest):
         try:
             vac = _get_vacuum()
             result = vac.set_resume_after_charge(req.enabled)
-            return {"ok": True, "enabled": req.enabled, "result": result}
+            return _action_response(result, enabled=req.enabled)
         except Exception as e:
             logger.exception("set resume after charge failed")
             raise HTTPException(500, detail=str(e)) from e
 
     @app.post("/api/settings/carpet-boost")
-    async def set_carpet_boost(req: ToggleSettingRequest):
+    def set_carpet_boost(req: ToggleSettingRequest):
         try:
             vac = _get_vacuum()
             result = vac.set_carpet_boost(req.enabled)
-            return {"ok": True, "enabled": req.enabled, "result": result}
+            return _action_response(result, enabled=req.enabled)
         except Exception as e:
             logger.exception("set carpet boost failed")
             raise HTTPException(500, detail=str(e)) from e
 
     @app.post("/api/settings/child-lock")
-    async def set_child_lock(req: ToggleSettingRequest):
+    def set_child_lock(req: ToggleSettingRequest):
         try:
             vac = _get_vacuum()
             result = vac.set_child_lock(req.enabled)
-            return {"ok": True, "enabled": req.enabled, "result": result}
+            return _action_response(result, enabled=req.enabled)
         except Exception as e:
             logger.exception("set child lock failed")
             raise HTTPException(500, detail=str(e)) from e
 
     @app.post("/api/settings/smart-wash")
-    async def set_smart_wash(req: ToggleSettingRequest):
+    def set_smart_wash(req: ToggleSettingRequest):
         try:
             vac = _get_vacuum()
             result = vac.set_smart_wash(req.enabled)
-            return {"ok": True, "enabled": req.enabled, "result": result}
+            return _action_response(result, enabled=req.enabled)
         except Exception as e:
             logger.exception("set smart wash failed")
             raise HTTPException(500, detail=str(e)) from e
 
     @app.post("/api/settings/carpet-avoidance")
-    async def set_carpet_avoidance(req: ModeSettingRequest):
+    def set_carpet_avoidance(req: ModeSettingRequest):
         try:
             vac = _get_vacuum()
             result = vac.set_carpet_avoidance(req.mode)
-            return {"ok": True, "mode": req.mode, "result": result}
+            return _action_response(result, mode=req.mode)
         except ValueError as e:
             raise HTTPException(400, detail=str(e)) from e
         except Exception as e:
@@ -567,13 +641,13 @@ def create_app() -> FastAPI:
             raise HTTPException(500, detail=str(e)) from e
 
     @app.post("/api/settings/clean-rags-tip")
-    async def set_clean_rags_tip(req: MinutesSettingRequest):
+    def set_clean_rags_tip(req: MinutesSettingRequest):
         try:
             if not (0 <= req.minutes <= 120):
                 raise HTTPException(400, detail="clean rags tip must be between 0 and 120 minutes")
             vac = _get_vacuum()
             result = vac.set_clean_rags_tip(req.minutes)
-            return {"ok": True, "minutes": req.minutes, "result": result}
+            return _action_response(result, minutes=req.minutes)
         except HTTPException:
             raise
         except ValueError as e:
@@ -585,7 +659,7 @@ def create_app() -> FastAPI:
     # ── Water Tank Level Estimation ─────────────────────────────
 
     @app.get("/api/tanks")
-    async def tank_levels():
+    def tank_levels():
         """Get estimated water tank levels."""
         from xiao.core.config import get_tank_state
 
@@ -617,18 +691,15 @@ def create_app() -> FastAPI:
         }
 
     @app.post("/api/tanks/reset")
-    async def reset_tank_tracking(req: dict | None = None):
+    def reset_tank_tracking(req: TankResetRequest | None = None):
         """Reset tank tracking after refilling/emptying."""
         from xiao.core.config import reset_tanks as _reset_tanks
 
-        which = "both"
-        if req and "which" in req:
-            which = req["which"]  # "clean", "dirty", or "both"
-        state = _reset_tanks(which)
+        state = _reset_tanks(req.which if req else "both")
         return {"ok": True, "state": state}
 
     @app.post("/api/tanks/update")
-    async def update_tank_tracking():
+    def update_tank_tracking():
         """Called periodically to update tank estimates based on cleaning history.
 
         Auto-resets tanks when vacuum exits state 21 (WashingMopPause).
@@ -686,10 +757,3 @@ def create_app() -> FastAPI:
             raise HTTPException(500, detail=str(e)) from e
 
     return app
-
-
-def _extract_code(result: Any) -> int:
-    """Pull the response code from a cloud API result."""
-    if isinstance(result, dict):
-        return result.get("code", result.get("result", {}).get("code", -1))
-    return 0

@@ -1999,13 +1999,45 @@ function getRoomEmoji(name) {
 }
 
 // ── API helper with retry ──────────────────────────────────
+// Optional dashboard token: `xiao web` prints a URL with ?token=…; keep it for
+// this tab only and strip it from the address bar.
+const DASH_TOKEN = (() => {
+  let t = null;
+  try {
+    const url = new URL(window.location.href);
+    t = url.searchParams.get('token');
+    if (t) {
+      try { sessionStorage.setItem('xiaoToken', t); } catch (_) {}
+      url.searchParams.delete('token');
+      history.replaceState(null, '', url.pathname + url.search + url.hash);
+    } else {
+      try { t = sessionStorage.getItem('xiaoToken'); } catch (_) {}
+    }
+  } catch (_) {}
+  return t;
+})();
+
+function escapeHtml(value) {
+  return String(value ?? '').replace(/[&<>"']/g, c => ({
+    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+  }[c]));
+}
+
 async function api(path, opts = {}) {
   try {
-    const r = await fetch(path, {
-      headers: { 'Content-Type': 'application/json' },
-      ...opts,
-    });
-    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    const headers = {
+      'Content-Type': 'application/json',
+      'X-Xiao-Client': 'dashboard',
+      ...(DASH_TOKEN ? { 'X-Xiao-Token': DASH_TOKEN } : {}),
+      ...(opts.headers || {}),
+    };
+    const r = await fetch(path, { ...opts, headers });
+    if (!r.ok) {
+      let detail = '';
+      try { detail = (await r.json()).detail || ''; } catch (_) {}
+      if (r.status === 401) detail = detail || 'dashboard token required — open the URL printed by `xiao web`';
+      throw new Error(detail ? `HTTP ${r.status}: ${detail}` : `HTTP ${r.status}`);
+    }
     setConnected(true);
     retryDelay = 1000; // reset on success
     return await r.json();
@@ -2455,9 +2487,9 @@ async function refreshRooms() {
     grid.innerHTML = roomsData.map(r => {
       const emoji = getRoomEmoji(r.name);
       return `<div class="room-chip ${selectedRooms.has(r.id) ? 'selected' : ''}"
-           data-id="${r.id}" onclick="toggleRoom(${r.id})">
+           data-id="${Number(r.id)}" onclick="toggleRoom(${Number(r.id)})">
         <span class="room-emoji">${emoji}</span>
-        ${r.name}
+        ${escapeHtml(r.name)}
       </div>`;
     }).join('');
     updateRoomBadge();
@@ -2490,11 +2522,11 @@ async function refreshSchedules() {
     html += '</tr></thead><tbody>';
     for (const s of scheds) {
       if (s.parse_error) {
-        html += `<tr><td colspan="6" style="color:var(--text-dim)">${s.raw || '?'}</td></tr>`;
+        html += `<tr><td colspan="6" style="color:var(--text-dim)">${escapeHtml(s.raw || '?')}</td></tr>`;
         continue;
       }
       const dotCls = s.enabled ? 'on' : 'off';
-      const rooms = (s.room_names || s.rooms_display || []).join(', ') || '—';
+      const rooms = escapeHtml((s.room_names || s.rooms_display || []).join(', ') || '—');
       const days = s.days_text || s.days_display || s.days || '—';
 
       // Check if this schedule is likely running now (within 90 min window)
@@ -2579,7 +2611,11 @@ function cleanSelectedRooms() {
 // ── Actions ────────────────────────────────────────────────
 async function doAction(path, successMsg) {
   try {
-    await api(path, { method: 'POST' });
+    const res = await api(path, { method: 'POST' });
+    if (res && res.ok === false) {
+      toast(`Rejected by vacuum (code ${res.code ?? '?'})`, 'err');
+      return;
+    }
     toast(successMsg);
     setTimeout(refreshStatus, 1500);
   } catch (e) { toast('Error: ' + e.message, 'err'); }

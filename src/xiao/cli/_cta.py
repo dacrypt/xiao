@@ -1,11 +1,12 @@
 """GitHub star CTA helpers.
 
 Three CTA surfaces:
-1. Static banner printed after `xiao setup init` succeeds.
+1. Static banner printed after `xiao setup init` / `xiao setup cloud` succeeds.
 2. One-shot first-run banner printed before any command on first invocation.
 3. Epilog line in the top-level `--help` output.
 
-Honors `XIAO_NO_CTA=1` and `NO_COLOR`/non-TTY to stay quiet in CI/scripts.
+Honors `XIAO_NO_CTA=1` and non-TTY to stay quiet in CI/scripts. Banners go to
+stderr so they never corrupt `--json` output or the MCP stdio stream.
 """
 
 from __future__ import annotations
@@ -25,7 +26,7 @@ _HELP_EPILOG = f"If xiao helps you, consider starring the repo: {REPO_URL}"
 def _suppressed() -> bool:
     if os.environ.get("XIAO_NO_CTA") == "1":
         return True
-    return not sys.stdout.isatty()
+    return not (sys.stdout.isatty() and sys.stderr.isatty())
 
 
 def help_epilog() -> str:
@@ -55,7 +56,7 @@ def show_star_banner(*, mark: bool = True) -> None:
     from rich.console import Console
     from rich.panel import Panel
 
-    Console().print(
+    Console(stderr=True).print(
         Panel(
             f"[bold]Enjoying xiao?[/bold]\n"
             f"Star the repo on GitHub — it helps other users find it.\n\n"

@@ -59,6 +59,19 @@ def _check_config() -> tuple[str, str, str]:
     return _row("Config file", "ok", str(CONFIG_FILE))
 
 
+def _check_config_permissions() -> tuple[str, str, str]:
+    if not CONFIG_FILE.exists():
+        return _row("Config file private", "warn", "skipped (no config file)")
+    mode = CONFIG_FILE.stat().st_mode & 0o777
+    if mode & 0o077:
+        return _row(
+            "Config file private",
+            "fail",
+            f"mode {mode:o} — readable by other users; it holds your Xiaomi password. Run any xiao command or chmod 600",
+        )
+    return _row("Config file private", "ok", f"mode {mode:o}")
+
+
 def _check_configured() -> tuple[str, str, str]:
     if is_configured():
         mode = "cloud" if is_cloud_mode() else "local"
@@ -106,6 +119,9 @@ def _check_vacuum_reachable() -> tuple[str, str, str]:
         data = vac.status()
         state = (data or {}).get("state", "?")
         return _row("Vacuum reachable", "ok", f"state={state}")
+    except SystemExit as e:
+        # _vacuum() maps config/auth failures to exit codes; report, don't abort doctor.
+        return _row("Vacuum reachable", "fail", f"exit code {e.code} — see message above")
     except Exception as e:
         return _row("Vacuum reachable", "fail", str(e)[:80])
 
@@ -125,10 +141,12 @@ def run(skip_network: bool = False) -> int:
         _check_package("micloud"),
         _check_playwright_browser(),
         _check_config(),
+        _check_config_permissions(),
         _check_configured(),
         _check_browser_profile(),
         _check_cloud_session(),
         _check_tool("xiao"),
+        _check_tool("gog"),
     ]
     if not skip_network:
         checks.append(_check_vacuum_reachable())
