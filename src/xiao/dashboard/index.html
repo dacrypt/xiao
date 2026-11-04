@@ -2040,9 +2040,19 @@ async function api(path, opts = {}) {
     }
     setConnected(true);
     retryDelay = 1000; // reset on success
-    return await r.json();
+    const data = await r.json();
+    // The server reached the vacuum but the vacuum refused the command:
+    // surface it as an error so no handler toasts a false success.
+    const method = (opts.method || 'GET').toUpperCase();
+    if (method !== 'GET' && data && data.ok === false) {
+      const err = new Error(`Rejected by vacuum (code ${data.code ?? '?'})`);
+      err.rejected = true;
+      err.response = data;
+      throw err;
+    }
+    return data;
   } catch (e) {
-    setConnected(false);
+    if (!e.rejected) setConnected(false);
     throw e;
   }
 }
@@ -2052,7 +2062,7 @@ async function apiRetry(path, opts = {}, maxAttempts = 3) {
     try {
       return await api(path, opts);
     } catch (e) {
-      if (i === maxAttempts - 1) throw e;
+      if (e.rejected || i === maxAttempts - 1) throw e;
       const delay = Math.min(retryDelay * Math.pow(2, i), maxRetry);
       await new Promise(r => setTimeout(r, delay));
     }
@@ -2611,11 +2621,7 @@ function cleanSelectedRooms() {
 // ── Actions ────────────────────────────────────────────────
 async function doAction(path, successMsg) {
   try {
-    const res = await api(path, { method: 'POST' });
-    if (res && res.ok === false) {
-      toast(`Rejected by vacuum (code ${res.code ?? '?'})`, 'err');
-      return;
-    }
+    await api(path, { method: 'POST' });
     toast(successMsg);
     setTimeout(refreshStatus, 1500);
   } catch (e) { toast('Error: ' + e.message, 'err'); }
