@@ -17,6 +17,8 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+      - name: Lockfile is up to date
+        run: uv lock --check
       - run: uv sync
       - name: Ruff check
         run: uv run ruff check src/ tests/
