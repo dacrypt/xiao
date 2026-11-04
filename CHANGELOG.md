@@ -5,6 +5,25 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.8.0](https://github.com/dacrypt/xiao/compare/v0.7.2...v0.8.0) (2026-11-04)
+
+
+### Added
+
+* **cli:** add --version and single-source the package version ([0b7cc38](https://github.com/dacrypt/xiao/commit/0b7cc3895364f23c6c74a6e8dac52f8cdefbff5a))
+* **cli:** add --version; single-source version; CI package smoke test ([f932809](https://github.com/dacrypt/xiao/commit/f93280982f92a5cc5cb57862c0723413171b159d))
+
+
+### Fixed
+
+* harden credentials, dashboard and MCP; honest exit codes and docs ([4fa1e96](https://github.com/dacrypt/xiao/commit/4fa1e96b97a2cf0e5af8f32b762152e5e255683f))
+* harden credentials, dashboard, MCP and CLI error handling ([7244993](https://github.com/dacrypt/xiao/commit/724499309de4947ffaaf67ce65826d0466922d36))
+
+
+### Documentation
+
+* align README, AGENTS, PRIVACY and skills with actual behaviour ([0fa403a](https://github.com/dacrypt/xiao/commit/0fa403a0ee81dfeeaf7f7a3bae7ebc55c1ebf250))
+
 ## [0.7.2](https://github.com/dacrypt/xiao/compare/v0.7.1...v0.7.2) (2026-05-26)
 
 
