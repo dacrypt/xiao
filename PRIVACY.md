@@ -1,6 +1,6 @@
 # Privacy Policy
 
-**Effective date:** 2026-04-21
+**Effective date:** 2026-11-04
 **Project:** [`xiao`](https://github.com/dacrypt/xiao) — open-source Python CLI for controlling a Xiaomi Robot Vacuum via Xiaomi Cloud.
 **License:** MIT (this is a free, open-source project, not a commercial service).
 
@@ -26,7 +26,11 @@ a config file (platform-specific location — typically
 `~/.config/xiao/config.toml` on Linux):
 
 - Your Xiaomi account username (email)
-- Your Xiaomi account password (hashed client-side)
+- Your Xiaomi account password, **stored in plain text** (xiao needs it to
+  log in again when a session expires). The file is created with owner-only
+  permissions (`0600`, directory `0700`); older installs are tightened
+  automatically on the next run. Treat it like any other credential file —
+  don't sync it to shared storage or commit it.
 - The device ID of your vacuum (discovered from Xiaomi's API)
 - Short-lived Xiaomi Cloud session tokens (`serviceToken`, `ssecurity`) that
   expire every ~6–8 hours and are refreshed automatically
@@ -43,12 +47,21 @@ The only outbound network traffic `xiao` generates is:
 1. **Xiaomi Cloud API** (e.g. `api.io.mi.com`, `account.xiaomi.com`) —
    required for the tool to function. All commands to your vacuum are
    RC4-signed and go through Xiaomi's official endpoints.
-2. **The persistent Chromium session on `127.0.0.1:18800`** — a local
-   browser that you run yourself for automatic token refresh. This is
-   localhost only; no external party is involved.
-3. **(Fallback)** If the local Chromium session is not available, `xiao`
-   uses Playwright to open a browser window for full login. Traffic again
-   goes only to Xiaomi.
+2. **xiao's private Chromium profile** (`<config dir>/chromium`, seeded once
+   by `xiao setup browser-login`) — launched headless by Playwright to
+   refresh tokens. It only talks to Xiaomi. Power users can instead point
+   xiao at their own Chromium over CDP with `XIAO_CDP_PORT`.
+3. **(Fallback)** If the profile has no valid session, `xiao` uses Playwright
+   for a full login. Traffic again goes only to Xiaomi.
+4. **(Optional) Your Gmail, via the `gog` CLI** — only if the `gog` command
+   is installed *and* Xiaomi asks for email verification during a full
+   login, xiao runs `gog gmail search "xiaomi verification after:<time>"`
+   locally to read the 6-digit code. Without `gog`, xiao asks you to type
+   the code instead. xiao never logs the code.
+
+The `xiao web` dashboard listens on `127.0.0.1` by default. Binding it to
+another interface (`--host`) requires an access token, generated
+automatically and printed once.
 
 No request goes to any server controlled by the maintainers of this
 project. There is no such server.
@@ -72,9 +85,10 @@ public discussion.
 
 ## Logs
 
-`xiao` may write local log files (e.g. `~/.npm/_logs/` from npm, or
-Playwright browser caches) during debugging. These stay on your machine
-and are not shipped anywhere.
+`xiao` does not write log files by default. With `XIAO_DEBUG=1` it logs to
+stderr and saves login-flow screenshots to `<config dir>/debug/` (owner-only
+permissions) to help diagnose login failures — delete them when done. Nothing
+is shipped anywhere.
 
 ## Source code
 

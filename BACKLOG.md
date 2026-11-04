@@ -7,7 +7,11 @@
 - ⚪ P4 — Research / exploration
 
 ## Active Bugs
-- 🔴 Room-specific cleaning still needs on-device verification — `clean_rooms_miot()` now preloads `siid 4 piid 10` `clean-extend-data` and then calls official `siid 2 aiid 3`, and xiao now warns/returns exit code 80 when the action is accepted but the robot still looks docked/charging. Actual X20+ hardware behavior still needs confirmation after this sequence change. (Updated 2026-05-01)
+- 🔴 Room-specific cleaning still needs on-device verification — `clean_rooms_miot()` calls the official `siid 2 aiid 3` (`start-room-sweep`, piid 4 = comma-separated room IDs). It does **not** yet preload `siid 4 piid 10` (`clean-extend-data`); that sequence is still to be tried on hardware. xiao warns/returns exit code 80 when the action is accepted but the robot still looks docked/charging, and no longer re-sends a second command via the legacy RPC when the first call errors. (Updated 2026-11-04)
+- 🟠 Room discovery — the cloud spec exposes no room list for c102gl; `xiao map rooms` merges `get_room_mapping` (if any), room IDs referenced by device schedules (siid 8 piid 2) and user aliases. A real map decode would replace this (see Research).
+- 🟠 Pause — the c102gl spec has no pause action on siid 2, so cloud `pause` is a stop (documented and reported as such). Find a true pause/resume if one exists.
+- 🟠 Spot clean — no cloud action known for c102gl; `xiao clean -s` exits 1 in cloud mode instead of launching a full clean.
+- 🔵 Store the Xiaomi password in the OS keyring (optional `keyring` extra) instead of `config.toml`.
 - 🔴 FIXED: `set_fan_speed()` was writing to siid 2 piid 2 (device fault, read-only!) instead of piid 3 (mode/fan). This means every `xiao speed set` command was attempting to write a fault code. Also `status()` was mapping piid 2 (fault) → `fan_speed` display, causing garbage values. Fixed 2026-03-31.
 - 🔴 FIXED: `set_water_level()` was writing to siid 18 piid 1 (mop-life-level, READ-ONLY %) instead of siid 4 piid 5 (mop-mode, 1=Low, 2=Medium, 3=High). Every water level command was corrupting mop consumable tracking. Also `water_level()` returned a stub string instead of reading from the device. Fixed 2026-04-02.
 - 🔴 FIXED: `status()` mapped state 13 → "In Dock" but official MIoT spec says 13 = "Charging Completed". Fixed 2026-04-02.

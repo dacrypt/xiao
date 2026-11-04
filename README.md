@@ -72,6 +72,17 @@ docker run --rm -v "$HOME/.config/xiao:/root/.config/xiao" \
 
 (On macOS the host path is `~/Library/Application Support/xiao`.)
 
+The default image has no Chromium, so it can only use the cached session and
+stops working when that expires (~6–8 h). For long-running use, build it with
+`docker build --build-arg WITH_PLAYWRIGHT=1 -t xiao .` so silent token refresh
+works. To serve the dashboard from a container, bind it explicitly — xiao then
+requires the access token it prints:
+
+```bash
+docker run --rm -p 8120:8120 -v "$HOME/.config/xiao:/root/.config/xiao" \
+  ghcr.io/dacrypt/xiao web --host 0.0.0.0
+```
+
 ### MCP server (optional)
 
 Install with the `mcp` extra and `xiao` exposes vacuum control as a
@@ -196,12 +207,12 @@ Every command. One row each. Full catalog also lives in [AGENTS.md](AGENTS.md).
 |---|---|---|
 | `xiao status [--full] [--json]` | State + battery + fan + mode | `--full` adds DND/water/consumables; `--json` for machine-readable output |
 | `xiao start` | Full-house clean (always mop-washes first) | — |
-| `xiao stop` / `xiao pause` | Stop / pause current clean | — |
+| `xiao stop` / `xiao pause` | Stop the current clean. In cloud mode the X20+ has no pause action, so `pause` also stops (and says so) | — |
 | `xiao dock` | Return to charging dock | — |
 | `xiao find` | Beep to locate | — |
 | `xiao clean -r <id\|alias>` | Clean one or more rooms | `-r` repeatable, `--speed`, `-w`, `--repeat` |
 | `xiao clean -z "x1,y1,x2,y2"` | Clean a rectangle (coords in mm) | `-z` repeatable, `--speed`, `-w`, `--repeat` |
-| `xiao clean -s` | Spot clean at current location | `--speed`, `-w` |
+| `xiao clean -s` | Spot clean (local miIO mode only — cloud mode exits 1; use a small `-z` zone) | `--speed`, `-w` |
 | `xiao wash` / `xiao dry [--stop]` | Base-station mop wash / dry | — |
 | `xiao dust` / `xiao eject` | Dust collect / eject tray | — |
 | `xiao settings speed <level>` | Fan: `silent` \| `standard` \| `medium` \| `turbo` | no arg → print current |
@@ -214,8 +225,8 @@ Every command. One row each. Full catalog also lives in [AGENTS.md](AGENTS.md).
 | `xiao settings smart-wash on/off` | Toggle smart mop washing at the base station | no arg → print current |
 | `xiao settings carpet-avoidance avoid\|auto` | Choose whether carpets are actively avoided or handled automatically | no arg → print current |
 | `xiao settings clean-rags-tip <0-120>` | Set base-station mop wash reminder interval in minutes | no arg → print current |
-| `xiao map rooms` | List room IDs → names | — |
-| `xiao map show` | Show raw map metadata from the cloud | — |
+| `xiao map rooms` / `xiao rooms` | List room IDs from the device room map, its schedules and your aliases | — |
+| `xiao map show` | Show what the cloud exposes about the map | — |
 | `xiao rooms alias <id> "<name>"` | Add friendly-name alias | — |
 | `xiao rooms rename <id\|alias> "<new>"` | Rename an alias | — |
 | `xiao schedule` | Show parsed schedules in a compact table | `--json` for machine-readable output |
@@ -224,7 +235,7 @@ Every command. One row each. Full catalog also lives in [AGENTS.md](AGENTS.md).
 | `xiao consumables reset <part>` | Reset counter (`main_brush` \| `side_brush` \| `filter` \| `mop` \| `all`) | — |
 | `xiao report` | Full combined report | — |
 | `xiao cloud-login` | Force full re-login (captcha + 2FA) | — |
-| `xiao web` | Launch Mission Control dashboard | `--port 8120` |
+| `xiao web` | Launch Mission Control dashboard (localhost only by default) | `--port 8120`, `--host`, `--token` |
 | `xiao raw <siid> <aiid> [params…]` | Raw MIoT call (escape hatch) | — |
 
 ### Flag reference
@@ -379,13 +390,12 @@ Agents should apply these in order before asking the user.
 
 | Signal | Retry step | If still failing |
 |---|---|---|
-| Stderr contains `token` / `401` / `auth` | Re-run the same command once (CDP refresh fires on next call) | `xiao cloud-login`, then retry |
-| Stderr: `Cannot connect to browser CDP on port 18800` | Launch `chromium --remote-debugging-port=18800 --user-data-dir=~/.xiao-chromium`, user logs in at `account.xiaomi.com` | Fall back to `xiao cloud-login` |
+| Exit `77`, or stderr contains `token` / `401` / `auth` | Re-run the same command once (silent profile refresh fires on next call) | `xiao setup browser-login`, then `xiao cloud-login` |
+| Exit `1` + `rejected by the vacuum (code N)` | Check `xiao status` (docked? error? state 21?) | Report the code to the user |
 | `State: 21` / `WashingMopPause` | Usually the user refills clean water / empties dirty water, then `xiao start` | Press physical play button on the robot |
 | `xiao clean -r <id>` returns code 0 but `xiao status` after 10s still shows `Idle`/`Docked` | Fall back to `xiao start` | Report to user |
 | Fan speed set rejected while docked | Start the clean first, then set speed; or pass `--speed` inline on the clean command | — |
-| `xiao map rooms` → "No rooms found" | Vacuum hasn't mapped the house yet — user must run `xiao start` once first | — |
-| Fan level printed as raw % (e.g. `68`) | Map via thresholds: `≤30=Silent, ≤55=Standard, ≤75=Medium, >75=Turbo` | — |
+| `xiao map rooms` → "No rooms found" | No room map exposed and no schedule references rooms — get the ID from the Xiaomi Home app and `xiao rooms alias <id> "Name"` | — |
 
 ---
 
@@ -395,6 +405,17 @@ Agents should apply these in order before asking the user.
 xiao web --port 8120
 # Open http://localhost:8120
 ```
+
+The dashboard can start the robot and change settings, so it is locked down
+by default:
+
+- It listens on **127.0.0.1** only and rejects requests whose `Host` isn't
+  localhost (blocks DNS-rebinding from web pages you visit).
+- State-changing requests must be same-origin and carry the
+  `X-Xiao-Client: dashboard` header, so other sites can't drive it (CSRF).
+- `xiao web --host 0.0.0.0` (LAN access) generates an access token and prints a
+  `http://<host>:8120/?token=…` URL; every API call then needs it. Pass your own
+  with `--token` or `XIAO_WEB_TOKEN`. Traffic is plain HTTP — trusted networks only.
 
 Glassmorphism + neon sci-fi dashboard:
 
@@ -410,14 +431,22 @@ Glassmorphism + neon sci-fi dashboard:
 
 ### REST API
 
-All endpoints at `http://localhost:8120/api/` — use these for **programmatic / JSON** consumption:
+All endpoints at `http://localhost:8120/api/` — use these for **programmatic / JSON** consumption.
+POST requests need `X-Xiao-Client: dashboard`; if a token is configured, every
+call (except `/health`) also needs `X-Xiao-Token: <token>`. Action endpoints return
+`{"ok": bool, "code": int, "result": …}` — `ok` is false when the vacuum rejected the command.
+
+```bash
+curl -s -X POST -H 'X-Xiao-Client: dashboard' http://localhost:8120/api/dock
+```
+
 
 | Endpoint | Method | Description |
 |---|---|---|
 | `/status` | GET | State, battery, fan, mode |
 | `/status/live` | GET | Minimal payload for fast polling (5s) |
 | `/consumables` | GET | Brush / filter health |
-| `/rooms` | GET | Room list |
+| `/rooms` | GET | Rooms from the device map, schedules and aliases: `[{id, name, sources}]` |
 | `/schedules` | GET | Parsed schedules |
 | `/settings` | GET | DND, volume, fan, water, resume-after-charge, carpet-boost, child-lock, smart-wash, carpet-avoidance, clean-rags-tip snapshot |
 | `/settings/resume-after-charge` | POST | `{enabled}` toggle auto-resume after charging |
@@ -453,9 +482,9 @@ Because `xiao` is just a CLI, teaching an agent to drive your vacuum is really j
 > 2. Verify:     xiao --help
 > 3. Walk me through `xiao setup cloud` interactively (ask me for email,
 >    password, region — one of us/cn/eu/ru/sg/tw/i2 — then discover device).
-> 4. Open https://account.xiaomi.com/pass/login in your own browser tab on
->    remote-debugging port 18800. I'll solve the captcha + email 2FA once.
->    Leave that tab open — it's the long-lived session xiao reuses.
+> 4. Run `xiao setup browser-login`: a Chromium window opens at
+>    account.xiaomi.com, I'll log in once (captcha / 2FA), and xiao keeps
+>    that session in its private profile for silent token refresh.
 > 5. Confirm with `xiao status` and `xiao consumables`.
 >
 > From now on, translate vacuum-related requests ("clean the kitchen",
@@ -473,25 +502,29 @@ Works the same way in Claude Code, Cursor, Aider, Codex. A ready-made Claude Cod
 
 ## Cloud Token Refresh
 
-Xiaomi Cloud `serviceToken`s expire every ~6-8h. A full re-login requires captcha + email 2FA, which can't be automated headlessly. To avoid that, `xiao` reuses a long-lived Xiaomi session inside a Chromium browser you keep running in the background with CDP on port `18800`.
+Xiaomi Cloud `serviceToken`s expire every ~6-8h. A full re-login requires captcha + email 2FA, which can't be automated headlessly. To avoid that, `xiao` keeps a long-lived Xiaomi session in **its own Chromium profile** (`<config dir>/chromium`, owner-only permissions).
 
-**The browser** is just regular Chromium launched once with:
+**Seed it once:**
 
 ```bash
-chromium --remote-debugging-port=18800 --user-data-dir=~/.xiao-chromium
+xiao setup browser-login   # opens Chromium at account.xiaomi.com — log in, then close the window
 ```
 
-…then logged into `https://account.xiaomi.com` manually. The login cookies persist in the user-data-dir, so future refreshes reuse them. No specific fork or external tool required.
+(`xiao setup cloud` offers to do this at the end.)
 
 **Refresh flow** (when the saved `serviceToken` is missing/expired, [`core/token_refresh.py`](src/xiao/core/token_refresh.py)):
 
-1. Connects via CDP at `http://127.0.0.1:18800` (Playwright `connect_over_cdp`).
+1. Launches the profile headless with Playwright (`launch_persistent_context`).
 2. Navigates to `account.xiaomi.com/pass/serviceLogin?sid=xiaomiio&_json=true` to obtain a fresh `_sign` — httpOnly cookies travel automatically.
-3. Submits a hidden `<form>` POST to `serviceLoginAuth2` (form submission because `fetch`/`xhr` don't send httpOnly cookies). Response yields `ssecurity` + `location`.
+3. Submits a hidden `<form>` POST to `serviceLoginAuth2` (form submission because `fetch`/`xhr` don't send httpOnly cookies). Credentials are passed to the page as data, never spliced into script source. Response yields `ssecurity` + `location`.
 4. Follows `location`, which sets the `serviceToken` cookie on the redirect.
 5. Returns `{userId, serviceToken, ssecurity}` to the caller → persisted to `config.toml`.
 
-If the browser isn't reachable, `xiao` falls back to a full Playwright login (headless Chromium). Manual trigger: `xiao cloud-login`.
+The same flow works from the CLI, the dashboard and the MCP server (Playwright's sync API is moved off any running asyncio loop automatically).
+
+**Power users:** set `XIAO_CDP_PORT=<port>` to reuse a Chromium you already run with `--remote-debugging-port`; xiao tries it first and falls back to the profile.
+
+**Full login fallback** (`xiao cloud-login`, or automatically when the profile has no session): a Playwright login that handles the terms dialog and email verification. The 6-digit code is read from Gmail if the optional `gog` Gmail CLI is installed (searching only mail newer than the login attempt); otherwise xiao asks you to type it. Set `XIAO_DEBUG=1` to get debug logs and login screenshots in `<config dir>/debug/`.
 
 ---
 
@@ -499,12 +532,8 @@ If the browser isn't reachable, `xiao` falls back to a full Playwright login (he
 
 *(Agents: the machine-oriented decision tree is in [Error Recovery](#error-recovery) above — this section is for humans.)*
 
-**`Cannot connect to browser CDP on port 18800`**
-The Chromium instance that holds your Xiaomi session isn't running (or isn't listening on 18800). Launch it:
-```bash
-chromium --remote-debugging-port=18800 --user-data-dir=~/.xiao-chromium
-```
-Then log into `https://account.xiaomi.com` once in that window. Leave it running. As a fallback, `xiao cloud-login` performs a full re-login with captcha + email 2FA.
+**Exit code 77 / "Cloud login failed"**
+The browser profile has no valid Xiaomi session (first run, or the session was revoked). Run `xiao setup browser-login` and log in once; future refreshes are silent again. As a fallback, `xiao cloud-login` performs a full re-login with captcha + email 2FA.
 
 **`Cloud mode enabled but not configured` (exit 2)**
 Run `xiao setup cloud` — the wizard asks for email / password / region and discovers your device.
@@ -516,7 +545,7 @@ Usually a Xiaomi Cloud issue. Check connectivity (`curl -I https://api.io.mi.com
 Known issue with room-specific cleans on some X20+ firmwares. Fallback: `xiao start` (full-house clean). Tracked in [BACKLOG.md](BACKLOG.md).
 
 **"No rooms found" from `xiao map rooms`**
-The robot hasn't mapped your house yet. Run `xiao start` once end-to-end and let it learn the layout, then retry.
+The X20+ cloud API exposes no room list, so xiao collects room IDs from the device's schedules and your aliases. If the robot has no map yet, run `xiao start` once end-to-end. Then either create a schedule for the rooms in the Xiaomi Home app (xiao picks the IDs up from it) or add them by hand with `xiao rooms alias <id> "Kitchen"`.
 
 **Fan speed setting is rejected while docked**
 Some MIoT properties are only writable while the robot is off the dock. Start a clean first, or pass `--speed` inline on the `clean` command.

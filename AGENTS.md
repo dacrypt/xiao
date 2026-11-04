@@ -38,13 +38,13 @@ instead of the managed profile.
 | `xiao status` | Current state, battery, fan, mode | `--full` for DND+water+consumables; `--json` / `-j` for machine-readable output |
 | `xiao start` | Full-house clean (always mop-washes first) | — |
 | `xiao stop` | Stop current clean | — |
-| `xiao pause` | Pause (resume with `xiao start`) | — |
+| `xiao pause` | Cloud mode: **stops** the job (X20+ has no pause action); `xiao start` begins a new run | — |
 | `xiao dock` | Return to charging dock | — |
 | `xiao find` | Beep to locate | — |
 | `xiao report` | Status + consumables + schedules + history | — |
 | `xiao clean -r <id-or-alias>` | Clean one or more rooms | `-r` repeatable, `--speed`, `-w`, `--repeat` |
 | `xiao clean -z "x1,y1,x2,y2"` | Clean a rectangle (mm) | `-z` repeatable, `--speed`, `-w`, `--repeat` |
-| `xiao clean -s` | Spot clean at current location | `--speed`, `-w` |
+| `xiao clean -s` | Spot clean — local miIO mode only; exits 1 in cloud mode (use a small `-z` zone) | `--speed`, `-w` |
 | `xiao wash` | Start mop-pad wash | — |
 | `xiao dry` / `xiao dry --stop` | Start / stop mop dry | — |
 | `xiao dust` | Dust collection at base | — |
@@ -53,15 +53,16 @@ instead of the managed profile.
 | `xiao settings water <level>` | Set mop water: `low` \| `medium` \| `high` | no arg → prints current |
 | `xiao settings volume <0-100>` | Set voice volume | no arg → prints current |
 | `xiao settings dnd on --start HH:MM --end HH:MM` / `off` | Do-not-disturb | no arg → prints current window |
-| `xiao map rooms` | List room IDs → names (run this BEFORE any `clean -r`) | — |
+| `xiao map rooms` | List room IDs from the device room map + its schedules + aliases (run BEFORE any `clean -r`) | — |
 | `xiao map show` | Show raw map metadata from the cloud | — |
 | `xiao rooms alias <id> "<name>"` | Create a friendly-name alias | — |
 | `xiao rooms rename <id-or-old-alias> "<new>"` | Rename | — |
+| `xiao rooms` | Same room list as `map rooms` (aliases only if not configured) | — |
 | `xiao schedule list` | Show parsed schedules | — |
 | `xiao consumables` | Brush / filter / mop health | `--json` / `-j` |
 | `xiao consumables reset <part>` | Reset counter for `main_brush` / `side_brush` / `filter` / `mop` / `all` | — |
 | `xiao cloud-login` | Force full login (captcha + email 2FA) | — |
-| `xiao web --port 8120` | Launch Mission Control dashboard | — |
+| `xiao web --port 8120` | Launch Mission Control dashboard on 127.0.0.1 | `--host` (non-localhost → auto token), `--token` |
 | `xiao raw <siid> <aiid> [params...]` | Escape hatch for raw MIoT calls | — |
 
 ### Canonical flag values
@@ -107,12 +108,12 @@ Apply these in order. Only ask the user after all automatic recovery fails.
 
 | Signal | Retry step | If still failing |
 |---|---|---|
-| Exit code ≠ 0, stderr/stdout contains "token" / "401" / "auth" | Re-run the same command once (auto-refresh via CDP fires on next call) | Run `xiao cloud-login` then retry |
-| Stderr: "Cannot connect to browser CDP on port 18800" | Launch `chromium --remote-debugging-port=18800 --user-data-dir=~/.xiao-chromium` and tell user to log in at `account.xiaomi.com` once | Fall back to `xiao cloud-login` |
+| Exit code `77`, or stderr mentions "token" / "401" / "auth" | Re-run the same command once (silent refresh via the browser profile fires on next call) | Ask the user to run `xiao setup browser-login`, then `xiao cloud-login` |
 | Output contains `State: 21` or "WashingMopPause" / "Water Tank Alert" | Ask user to refill clean-water / empty dirty-water, then `xiao start` | Ask user to press the physical play button on the robot |
 | `xiao clean -r <id>` returns code 0 but vacuum doesn't move (check `xiao status` after 10s — still `Idle`/`Docked`) | Fall back to `xiao start` | Report to user |
 | Fan speed change rejected with code ≠ 0 while docked | Start a clean first, then set speed (some MIoT fields are only writable off-dock) | Set `--speed` inline on the clean command |
-| `xiao map rooms` → "No rooms found" | Tell user the vacuum hasn't mapped the house yet — they need to run a full `xiao start` once first | — |
+| `xiao map rooms` → "No rooms found" | The device exposes no room map and no schedule references rooms. Ask the user for the room ID (Xiaomi Home app) and add it with `xiao rooms alias` | — |
+| Exit code `1` with "rejected by the vacuum (code N)" on stderr | The cloud accepted the call but the robot refused it — check `xiao status` (docked? error? state 21?) | Report the code to the user |
 
 ## Output parsing
 
@@ -127,32 +128,33 @@ xiao consumables --json    # { main_brush_life, filter_life, mop_left_time, ... 
 
 Commands without `--json` print Rich-formatted tables/panels to stdout. Parse
 by line: look for `Key: value` prefixes; table rows for `consumables`. Fan
-level may come back as a raw percentage that the CLI maps to names
-(`≤30=Silent, ≤55=Standard, ≤75=Medium, >75=Turbo`).
+level is the MIoT mode `0=Silent, 1=Standard, 2=Medium, 3=Turbo`. Progress and
+warnings go to **stderr**; stdout only carries the result (safe to pipe `--json`).
 
 For fully programmatic integrations, the REST API is an alternative:
 `xiao web --port 8120` → `GET http://localhost:8120/api/status` returns JSON.
-See README.md "REST API" for endpoint list.
+POSTs need the `X-Xiao-Client: dashboard` header (CSRF guard), plus
+`X-Xiao-Token` when a token is set. See README.md "REST API".
 
 ## Exit codes
 
 | Code | Meaning | Suggested agent action |
 |---|---|---|
 | `0` | Success | Continue |
-| `1` | Generic failure | Parse stderr; may be recoverable |
+| `1` | Generic failure, invalid arguments, or the vacuum rejected the command | Parse stderr; may be recoverable |
 | `2` | Not configured — `config.toml` missing or incomplete | Guide user through `xiao setup cloud` |
 | `77` | Cloud auth / token refresh failed | Run `xiao cloud-login`, then retry |
 | `78` | (reserved) Chromium CDP on port 18800 unreachable | Launch Chromium with `--remote-debugging-port=18800` |
 | `79` | (reserved) State 21 / water-tank alert | Ask user to refill/empty tanks, then `xiao start` |
 | `80` | Room-clean command accepted but the vacuum still looked docked/charging after verification | Re-check room IDs, then fall back to `xiao start` |
 
-Today only code `80` is emitted consistently. Codes `78-79` remain reserved;
+Codes `0`, `1`, `2`, `77` and `80` are emitted today. `78-79` remain reserved;
 detect those conditions by inspecting `xiao status --json` output.
 
 ## Safety / guardrails
 
 - Never commit or print the contents of `config.toml` — it contains the user's
-  Xiaomi password hash and service tokens.
+  Xiaomi password **in plain text** and live service tokens (file mode 0600).
 - Don't call `xiao raw` unless the user explicitly asks. It's an unchecked
   escape hatch into MIoT and can brick settings.
 - `xiao start` always triggers a mop wash first — warn the user if they asked

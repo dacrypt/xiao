@@ -111,11 +111,14 @@ src/xiao/
 │   ├── settings.py
 │   └── setup.py   # Cloud/local setup wizard
 ├── core/          # Business logic
-│   ├── cloud.py          # XiaomiCloud client (login, RC4, 2FA, captcha)
+│   ├── cloud.py          # XiaomiCloud client (login, RC4 signing, email 2FA)
 │   ├── cloud_vacuum.py   # CloudVacuumService (MIoT via cloud)
-│   ├── config.py         # TOML config management
-│   ├── token_refresh.py  # Token refresh via Chromium CDP (persistent session)
+│   ├── config.py         # TOML config (atomic, 0600 writes)
+│   ├── room_cleaning.py  # extract_code, verified room clean, room discovery
+│   ├── service.py        # build_vacuum(): shared by CLI / dashboard / MCP
+│   ├── token_refresh.py  # Token refresh via the persistent Chromium profile (or CDP)
 │   └── vacuum.py         # Local interface (unused in cloud mode)
+├── mcp_server.py  # MCP stdio server (tools run off the event loop)
 ├── dashboard/     # Web UI
 │   ├── server.py  # FastAPI backend
 │   └── index.html # Single-file glassmorphism frontend
