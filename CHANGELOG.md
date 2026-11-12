@@ -5,6 +5,39 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.9.0](https://github.com/dacrypt/xiao/compare/v0.8.1...v0.9.0) (2026-11-12)
+
+
+### Added
+
+* Apple Home (Matter), Siri Shortcuts, and room/zone cleaning that works on the X20+ ([adeb240](https://github.com/dacrypt/xiao/commit/adeb240823e3414ff2c22a55ed85f32a9c57629a))
+* handle the water-refill pause (state 21) like the Mi Home app ([4108fc8](https://github.com/dacrypt/xiao/commit/4108fc85c1120628be6d5ad6d45dcca9cdbaa305))
+* handle the water-refill pause (state 21) like the Mi Home app ([ae3937b](https://github.com/dacrypt/xiao/commit/ae3937b211b5e6c341b8d1b0fd3a99645a3c5768))
+* **matter:** add matterbridge-xiao plugin for Apple Home and Siri ([773ce30](https://github.com/dacrypt/xiao/commit/773ce30988571ef80493c096434d96e9a2d00437))
+* **siri:** add xiao shortcuts export and POST /api/voice ([77b1cad](https://github.com/dacrypt/xiao/commit/77b1cad244017f9f7038aa7e4f5ef5b2f55cb395))
+* stop mop drying before cleaning, typed Matter areas, pinned mDNS ([0dd8414](https://github.com/dacrypt/xiao/commit/0dd84149ea601d0d26f18a7cf62547efe66d2734))
+* stop mop drying before cleaning, typed Matter areas, pinned mDNS ([6912814](https://github.com/dacrypt/xiao/commit/69128147c1bc065a9cd5bccfb45ea8be3041caf8))
+* **web:** add POST /api/clean/zone endpoint ([8fcf1b8](https://github.com/dacrypt/xiao/commit/8fcf1b840286e187b47ec135e0121e4c669599e1))
+
+
+### Fixed
+
+* **cloud:** refresh on HTTP 426 and repair browser login ([8aedca7](https://github.com/dacrypt/xiao/commit/8aedca709049353f400ebac20110a7b99cc97771))
+* **cloud:** refresh on HTTP 426 and repair browser login ([bbf036e](https://github.com/dacrypt/xiao/commit/bbf036ea199b1ea7e2e1d33cb17139e6a7a890ee))
+* harden LAN room cleaning, voice and plugin per review ([1de0150](https://github.com/dacrypt/xiao/commit/1de015008bd6f68308bd9feaec54e50a79ee2ef8))
+* **lan:** back off between miIO handshake attempts ([66b25a0](https://github.com/dacrypt/xiao/commit/66b25a076bc1234e84fca5fb3c89091bd459f85e))
+* **lan:** back off between miIO handshake attempts ([b7b4b78](https://github.com/dacrypt/xiao/commit/b7b4b78b2d71ce6590e90cc974f65d3600f8a787))
+* **matter:** keep RVC error details within Matter's 64-character limit ([b7617c7](https://github.com/dacrypt/xiao/commit/b7617c77e1319597c483920a68a5dd41c86aefd3))
+* **rooms:** clean rooms over the LAN with the Dreame start-clean command ([a7f3cd6](https://github.com/dacrypt/xiao/commit/a7f3cd61ccf4c99099e7d3255941d5732e5b246d))
+* **rooms:** verify starts from Drying and resend once if ignored ([c64b202](https://github.com/dacrypt/xiao/commit/c64b202e176f4f21c39fa7a95c3d0fc4f0d0b99b))
+* **siri:** start shortcut names with Aspiradora so Home rooms don't capture them ([12e2aea](https://github.com/dacrypt/xiao/commit/12e2aeab36a6152ecc14291b3051fc7aa45a428d))
+* **zones:** clean zones over the LAN instead of starting a full clean ([86372fc](https://github.com/dacrypt/xiao/commit/86372fc4d5ad038520203e8668f7ce385e7a0be6))
+
+
+### Documentation
+
+* say which Siri languages drive the Matter vacuum ([56efda5](https://github.com/dacrypt/xiao/commit/56efda592224413fcdcbcb06d26d98f523260b9e))
+
 ## [0.8.1](https://github.com/dacrypt/xiao/compare/v0.8.0...v0.8.1) (2026-11-04)
 
 
