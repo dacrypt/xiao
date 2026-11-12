@@ -37,6 +37,14 @@ ROOM_CLEAN_IDLE_STATES = {
 }
 
 
+class WaitingForWaterError(RuntimeError):
+    """The robot is in state 21 (WashingMopPause): it paused a job for the water tanks.
+
+    After refilling the clean tank / emptying the dirty one, resume that job
+    (``start`` / Home ▶️ / «Aspiradora continúa») before asking for a new one.
+    """
+
+
 class LocalUnreachableError(RuntimeError):
     """The LAN path to the vacuum is unavailable; nothing was sent to the robot."""
 

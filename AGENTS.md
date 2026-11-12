@@ -113,7 +113,7 @@ Apply these in order. Only ask the user after all automatic recovery fails.
 | Signal | Retry step | If still failing |
 |---|---|---|
 | Exit code `77`, or stderr mentions "token" / "401" / "426" / "auth" | Re-run the same command once (silent refresh via the browser profile fires on next call) | Ask the user to run `xiao setup browser-login`, then `xiao cloud-login` |
-| Output contains `State: 21` or "WashingMopPause" / "Water Tank Alert" | Ask user to refill clean-water / empty dirty-water, then `xiao start` | Ask user to press the physical play button on the robot |
+| Output contains `State: 21` or "WashingMopPause" / "Water Tank Alert" | Ask user to refill clean-water / empty dirty-water, then `xiao start` (it confirms the refill over the LAN and resumes the paused job, like the Mi Home app). New `clean -r/-z` jobs are refused until then | Ask user to press the physical play button on the robot |
 | `xiao clean -r <id>` returns code 0 but vacuum doesn't move (check `xiao status` after 10s — still `Idle`/`Docked`) | Room cleaning only works over the LAN (stderr says "LAN path unavailable" when it fell back to the cloud): run from a machine on the robot's network, or fall back to `xiao start` | Report to user |
 | Fan speed change rejected with code ≠ 0 while docked | Start a clean first, then set speed (some MIoT fields are only writable off-dock) | Set `--speed` inline on the clean command |
 | `xiao map rooms` → "No rooms found" | The device exposes no room map and no schedule references rooms. Ask the user for the room ID (Xiaomi Home app) and add it with `xiao rooms alias` | — |

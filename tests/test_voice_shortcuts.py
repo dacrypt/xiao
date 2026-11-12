@@ -139,10 +139,11 @@ class TestLoopbackTokenExemption:
 class TestShortcutBuilder:
     def test_default_specs_cover_house_controls_and_each_room(self):
         names = [s.name for s in default_specs(ROOMS)]
-        assert names[:4] == [
+        assert names[:5] == [
             "Aspiradora a toda la casa",
             "Aspiradora a la base",
             "Detén la aspiradora",
+            "Aspiradora continúa",
             "Cómo está la aspiradora",
         ]
         assert "Aspiradora a la cocina" in names
@@ -189,3 +190,43 @@ class TestShortcutBuilder:
         assert plistlib.loads(target.read_bytes())["WFWorkflowActions"][0]["WFWorkflowActionIdentifier"] == (
             "is.workflow.actions.downloadurl"
         )
+
+
+class TestVoiceWaterPause:
+    def test_resume_confirms_the_refill(self, rooms):
+        vac = MagicMock()
+        vac.status.return_value = {"state": "WashingMopPause"}
+        vac.start.return_value = {"code": 0, "resumed": True}
+        with patch("xiao.dashboard.server._get_vacuum", return_value=vac):
+            body = _client().post("/api/voice", json={"action": "resume"}).json()
+        vac.start.assert_called_once()
+        assert body == {"ok": True, "say": "Listo, la aspiradora continúa la limpieza que había pausado."}
+
+    def test_resume_does_not_start_a_full_clean_when_nothing_is_paused(self, rooms):
+        vac = MagicMock()
+        vac.status.return_value = {"state": "Charging Completed"}
+        with patch("xiao.dashboard.server._get_vacuum", return_value=vac):
+            body = _client().post("/api/voice", json={"action": "resume"}).json()
+        vac.start.assert_not_called()
+        assert body["ok"] is False
+
+    def test_room_clean_during_the_water_pause_explains_what_to_do(self, rooms):
+        from xiao.core.room_cleaning import WaitingForWaterError
+
+        with (
+            patch("xiao.dashboard.server._get_vacuum"),
+            patch("xiao.dashboard.server.start_room_clean", side_effect=WaitingForWaterError("state 21")),
+        ):
+            body = _client().post("/api/voice", json={"room": "8"}).json()
+        assert body["ok"] is False
+        assert "Aspiradora continúa" in body["say"]
+
+    def test_room_endpoint_answers_409_during_the_water_pause(self, rooms):
+        from xiao.core.room_cleaning import WaitingForWaterError
+
+        with (
+            patch("xiao.dashboard.server._get_vacuum"),
+            patch("xiao.dashboard.server.start_room_clean", side_effect=WaitingForWaterError("state 21")),
+        ):
+            response = _client().post("/api/clean/rooms", json={"room_ids": [8]})
+        assert response.status_code == 409

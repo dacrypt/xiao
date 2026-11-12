@@ -15,7 +15,7 @@ from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse, JSONResponse
 from pydantic import BaseModel, Field
 
-from xiao.core.room_cleaning import extract_code, normalize_zone, start_room_clean
+from xiao.core.room_cleaning import WaitingForWaterError, extract_code, normalize_zone, start_room_clean
 
 logger = logging.getLogger(__name__)
 
@@ -71,7 +71,7 @@ class ZoneCleanRequest(BaseModel):
 class VoiceRequest(BaseModel):
     """One-string commands for Siri Shortcuts (no JSON arrays needed)."""
 
-    action: Literal["clean", "dock", "stop", "status"] = "clean"
+    action: Literal["clean", "resume", "dock", "stop", "status"] = "clean"
     room: str | None = None  # alias or id; several separated by commas
     zone: str | None = None  # "x1,y1,x2,y2" in mm
     lang: Literal["es", "en"] = "es"
@@ -84,6 +84,12 @@ _VOICE_TEXT = {
         "zone": "Listo, la aspiradora va a limpiar la zona.",
         "dock": "La aspiradora vuelve a la base.",
         "stop": "Aspiradora detenida.",
+        "resumed": "Listo, la aspiradora continúa la limpieza que había pausado.",
+        "nothing_paused": "La aspiradora no tiene ninguna limpieza en pausa.",
+        "water": (
+            "La aspiradora pausó la limpieza por el agua. Rellena el tanque limpio, vacía el sucio "
+            "y di «Aspiradora continúa»."
+        ),
         "status": "La aspiradora está {state}, con {battery}% de batería.",
         "not_moving": "La aspiradora aceptó la orden pero no se movió. Revisa los tanques de agua.",
         "rejected": "La aspiradora rechazó la orden (código {code}).",
@@ -97,6 +103,9 @@ _VOICE_TEXT = {
         "zone": "OK, the vacuum will clean the zone.",
         "dock": "The vacuum is going back to the dock.",
         "stop": "Vacuum stopped.",
+        "resumed": "OK, the vacuum is resuming its paused job.",
+        "nothing_paused": "The vacuum has no paused job.",
+        "water": "The vacuum paused its job for the water tanks. Refill the clean tank, empty the dirty one, then say resume.",
         "status": "The vacuum is {state}, battery {battery}%.",
         "not_moving": "The vacuum accepted the command but did not move. Check the water tanks.",
         "rejected": "The vacuum rejected the command (code {code}).",
@@ -569,6 +578,8 @@ def create_app(*, auth_token: str | None = None, loopback_only: bool = True) -> 
                 "warning": clean_result["warning"],
                 "transport": clean_result["transport"],
             }
+        except WaitingForWaterError as e:
+            raise HTTPException(409, detail=str(e)) from e
         except Exception as e:
             logger.exception("room clean failed")
             raise HTTPException(500, detail=str(e)) from e
@@ -591,6 +602,8 @@ def create_app(*, auth_token: str | None = None, loopback_only: bool = True) -> 
                 if water_code != 0:
                     notes.append(f"water level change rejected (code {water_code})")
             return _action_response(vac.clean_zone(zones), zones=zones, notes=notes)
+        except WaitingForWaterError as e:
+            raise HTTPException(409, detail=str(e)) from e
         except Exception as e:
             logger.exception("zone clean failed")
             raise HTTPException(500, detail=str(e)) from e
@@ -635,16 +648,25 @@ def create_app(*, auth_token: str | None = None, loopback_only: bool = True) -> 
                 result = _get_vacuum().clean_zone([zone])
                 code = extract_code(result)
                 return {"ok": code == 0, "say": text["zone"] if code == 0 else text["rejected"].format(code=code)}
+            if req.action == "resume":
+                vac = _get_vacuum()
+                if vac.status().get("state") != "WashingMopPause":
+                    return {"ok": False, "say": text["nothing_paused"]}
+                req = req.model_copy(update={"action": "clean"})
             if req.action in ("clean", "dock", "stop"):
                 vac = _get_vacuum()
                 result = {"clean": vac.start, "dock": vac.home, "stop": vac.stop}[req.action]()
                 code = extract_code(result)
                 key = {"clean": "house", "dock": "dock", "stop": "stop"}[req.action]
+                if isinstance(result, dict) and result.get("resumed"):
+                    key = "resumed"
                 return {"ok": code == 0, "say": text[key] if code == 0 else text["rejected"].format(code=code)}
             data = _get_vacuum().status()
             state = str(data.get("state", "Unknown"))
             shown = _STATE_ES.get(state, state) if req.lang == "es" else state
             return {"ok": True, "say": text["status"].format(state=shown, battery=data.get("battery", "?"))}
+        except WaitingForWaterError:
+            return {"ok": False, "say": text["water"]}
         except Exception as e:
             logger.exception("voice command failed")
             if _is_auth_error(e):

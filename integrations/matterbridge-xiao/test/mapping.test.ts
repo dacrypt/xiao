@@ -100,12 +100,11 @@ describe('mapStatus', () => {
     expect(mapped.runMode).toBe(runMode);
   });
 
-  it('reports the state-21 tank alert as a water-tank error', () => {
-    const mapped = mapStatus({ state: 'WashingMopPause', alert: '⚠️ Washing mop paused. Check clean water (refill) and dirty water (empty), then press Resume after fixing.' });
-    expect(mapped.operationalState).toBe(OperationalState.Error);
-    expect(mapped.errorStateId).toBe(ErrorState.WaterTankEmpty);
-    expect(mapped.errorDetails.length).toBeLessThanOrEqual(64);
-    expect(mapped.errorDetails).toMatch(/water/);
+  it('reports the state-21 water pause as Paused so Home offers Resume', () => {
+    const mapped = mapStatus({ state: 'WashingMopPause', alert: 'Check clean water' });
+    expect(mapped.operationalState).toBe(OperationalState.Paused);
+    expect(mapped.runMode).toBe(RUN_MODE_CLEANING);
+    expect(mapped.errorStateId).toBe(ErrorState.NoError);
   });
 
   it('keeps fault details within the Matter 64-character limit', () => {

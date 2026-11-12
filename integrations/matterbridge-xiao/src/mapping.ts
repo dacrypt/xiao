@@ -243,10 +243,11 @@ export function mapStatus(status: XiaoStatus): MatterRvcState {
   } else if (state === 'Dust Collecting') {
     operationalState = OperationalState.EmptyingDustBin;
   } else if (state === 'WashingMopPause') {
-    operationalState = OperationalState.Error;
-    errorStateId = ErrorState.WaterTankEmpty;
-    // Matter caps errorStateDetails at 64 characters; xiao's alert text is longer.
-    errorDetails = 'Refill the clean-water tank / empty the dirty-water tank';
+    // State 21: the job is paused for the water tanks. The robot can't tell when they've
+    // been refilled, so reporting Error would leave Home's ▶️ blocked forever. Paused lets
+    // Home offer Resume, which confirms the refill (see controller.resume).
+    operationalState = OperationalState.Paused;
+    runMode = RUN_MODE_CLEANING;
   } else if (state === 'Error') {
     operationalState = OperationalState.Error;
     errorStateId = ErrorState.UnableToCompleteOperation;

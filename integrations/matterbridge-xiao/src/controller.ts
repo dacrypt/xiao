@@ -4,7 +4,7 @@
  * these methods and pushes `MatterRvcState` updates back through the sink.
  */
 
-import { CLEAN_MODE_FAN, CLEAN_MODE_STANDARD, mapStatus, planClean, type AreaEntry, type CleanPlan, type MatterRvcState } from './mapping.js';
+import { CLEAN_MODE_FAN, CLEAN_MODE_STANDARD, mapStatus, OperationalState, planClean, type AreaEntry, type CleanPlan, type MatterRvcState } from './mapping.js';
 import type { XiaoClient } from './xiaoClient.js';
 
 export interface RvcSink {
@@ -74,6 +74,19 @@ export class XiaoRvcController {
       await this.client.start();
     }
     return plan;
+  }
+
+  /**
+   * Home's Resume. If the job is paused for water (state 21), `POST /api/start` confirms the
+   * refill and continues it; otherwise it starts what Home selected.
+   */
+  async resume(): Promise<void> {
+    if (this.lastState?.operationalState === OperationalState.Paused) {
+      this.log.info('Resuming the job paused for water');
+      await this.client.start();
+      return;
+    }
+    await this.startCleaning();
   }
 
   /** The X20+ has no real pause in cloud mode, so Pause stops the job (same as `xiao pause`). */

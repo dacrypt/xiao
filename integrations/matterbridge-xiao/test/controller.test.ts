@@ -76,6 +76,25 @@ describe('XiaoRvcController', () => {
     expect(client.setFan).toHaveBeenCalledWith('standard');
   });
 
+  it('resume confirms the refill when the job is paused for water', async () => {
+    const { client, controller } = setup();
+    client.status.mockResolvedValue({ state: 'WashingMopPause', battery: 90 });
+    await controller.refresh();
+    controller.selectAreas([2]);
+    await controller.resume();
+    expect(client.start).toHaveBeenCalledOnce();
+    expect(client.cleanRooms).not.toHaveBeenCalled();
+  });
+
+  it('resume starts the selected areas when nothing is paused', async () => {
+    const { client, controller } = setup();
+    client.status.mockResolvedValue({ state: 'Charging Completed', battery: 90 });
+    await controller.refresh();
+    controller.selectAreas([2]);
+    await controller.resume();
+    expect(client.cleanRooms).toHaveBeenCalledWith([2], 'standard');
+  });
+
   it('pause stops the job and goHome docks', async () => {
     const { client, controller } = setup();
     await controller.stop();

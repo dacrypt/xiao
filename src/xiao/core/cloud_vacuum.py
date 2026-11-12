@@ -173,7 +173,51 @@ class CloudVacuumService:
                 continue
         return True
 
+    WASHING_PAUSE_STATE = "WashingMopPause"
+
+    def _current_state(self) -> str | None:
+        try:
+            return self.status().get("state")
+        except Exception as e:  # pragma: no cover - network dependent
+            logger.debug("could not read status: %s", e)
+            return None
+
+    def resume_after_refill(self) -> dict:
+        """Leave state 21 (washing paused for water) and continue the paused job.
+
+        This is the Mi Home app's "water refilled / dirty tank emptied" confirmation:
+        Dreame's start-washing action (siid 4, aiid 4) with ``"1,1"`` in piid 10, sent
+        over the LAN (the published c102gl spec doesn't declare it, so the cloud
+        rejects it). The robot washes the mop and carries on with the job.
+        """
+        device = self._local()
+        try:
+            result = device.send(
+                "action",
+                {"did": "resume-after-refill", "siid": 4, "aiid": 4, "in": [{"piid": 10, "value": "1,1"}]},
+                retry_count=0,
+            )
+        except Exception:
+            self._local_device = None
+            raise
+        reply = result if isinstance(result, dict) else {"code": 0, "result": result}
+        return {**reply, "resumed": True}
+
+    def ensure_not_waiting_for_water(self) -> None:
+        """Refuse a new room/zone job while a job is paused for the water tanks."""
+        from xiao.core.room_cleaning import WaitingForWaterError
+
+        if self._current_state() == self.WASHING_PAUSE_STATE:
+            raise WaitingForWaterError(
+                "The vacuum paused its job for the water tanks (state 21). Refill the clean tank / "
+                "empty the dirty one, then resume it (`xiao start`, ▶️ in Home or «Aspiradora continúa»)."
+            )
+
     def start(self) -> dict:
+        """Start a full clean, or resume a job paused for water (state 21)."""
+        if self._current_state() == self.WASHING_PAUSE_STATE:
+            logger.info("Vacuum is paused for water; resuming the paused job")
+            return self.resume_after_refill()
         self.cancel_drying()
         a = MIOT_ACTIONS["start_clean"]
         return cloud_call_action(self.cloud, self.did, a["siid"], a["aiid"], country=self.country)
@@ -1096,6 +1140,7 @@ class CloudVacuumService:
     ) -> dict:
         """Clean rooms in order; fan/water default to the robot's current settings."""
         self._local()  # fail fast (LocalUnreachableError) before any cloud reads
+        self.ensure_not_waiting_for_water()
         self.cancel_drying()
         fan_raw, water_raw = self._resolve_fan_water(fan, water)
         selects = [[int(rid), max(1, repeat), fan_raw, water_raw, order] for order, rid in enumerate(room_ids, 1)]
@@ -1106,6 +1151,7 @@ class CloudVacuumService:
     ) -> dict:
         """Clean rectangles ``[x1, y1, x2, y2]`` (map mm)."""
         self._local()
+        self.ensure_not_waiting_for_water()
         self.cancel_drying()
         fan_raw, water_raw = self._resolve_fan_water(fan, water)
         areas = [[*zone, max(1, repeat), fan_raw, water_raw] for zone in zones]
