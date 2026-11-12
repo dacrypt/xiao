@@ -99,10 +99,15 @@ describe('mapStatus', () => {
   });
 
   it('reports the state-21 tank alert as a water-tank error', () => {
-    const mapped = mapStatus({ state: 'WashingMopPause', alert: 'Refill clean water' });
+    const mapped = mapStatus({ state: 'WashingMopPause', alert: '⚠️ Washing mop paused. Check clean water (refill) and dirty water (empty), then press Resume after fixing.' });
     expect(mapped.operationalState).toBe(OperationalState.Error);
     expect(mapped.errorStateId).toBe(ErrorState.WaterTankEmpty);
-    expect(mapped.errorDetails).toBe('Refill clean water');
+    expect(mapped.errorDetails.length).toBeLessThanOrEqual(64);
+    expect(mapped.errorDetails).toMatch(/water/);
+  });
+
+  it('keeps fault details within the Matter 64-character limit', () => {
+    expect(mapStatus({ state: 'Error', fault_code: 123456789 }).errorDetails.length).toBeLessThanOrEqual(64);
   });
 
   it('converts battery to Matter half-percent units and charge state', () => {

@@ -183,7 +183,8 @@ export function mapStatus(status: XiaoStatus): MatterRvcState {
   } else if (state === 'WashingMopPause') {
     operationalState = OperationalState.Error;
     errorStateId = ErrorState.WaterTankEmpty;
-    errorDetails = status.alert ?? 'Refill the clean-water tank / empty the dirty-water tank';
+    // Matter caps errorStateDetails at 64 characters; xiao's alert text is longer.
+    errorDetails = 'Refill the clean-water tank / empty the dirty-water tank';
   } else if (state === 'Error') {
     operationalState = OperationalState.Error;
     errorStateId = ErrorState.UnableToCompleteOperation;
@@ -205,7 +206,7 @@ export function mapStatus(status: XiaoStatus): MatterRvcState {
   return {
     operationalState,
     errorStateId,
-    errorDetails,
+    errorDetails: errorDetails.slice(0, 64),
     runMode,
     batPercentRemaining: battery === null ? null : battery * 2,
     batChargeState,
