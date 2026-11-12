@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  AreaType,
   BatChargeState,
   buildAreas,
+  inferAreaType,
   ErrorState,
   mapStatus,
   OperationalState,
@@ -52,7 +54,7 @@ describe('buildAreas', () => {
     expect(area).toEqual({
       areaId: 2,
       mapId: null,
-      areaInfo: { locationInfo: { locationName: 'Cocina', floorNumber: null, areaType: null }, landmarkInfo: null },
+      areaInfo: { locationInfo: { locationName: 'Cocina', floorNumber: null, areaType: AreaType.Kitchen }, landmarkInfo: null },
     });
   });
 });
@@ -120,5 +122,30 @@ describe('mapStatus', () => {
 
   it('treats an idle robot that is charging as Charging', () => {
     expect(mapStatus({ state: 'Idle', charging: 'Charging' }).operationalState).toBe(OperationalState.Charging);
+  });
+});
+
+describe('inferAreaType', () => {
+  it.each([
+    ['Cocina', AreaType.Kitchen],
+    ['New Kitchen', AreaType.Kitchen],
+    ['Baño', AreaType.Bathroom],
+    ['Baño principal', AreaType.PrimaryBathroom],
+    ['Habitación Principal', AreaType.PrimaryBedroom],
+    ['Habitación de huéspedes', AreaType.Bedroom],
+    ['Sala', AreaType.LivingRoom],
+    ['Pasillo', AreaType.Hallway],
+    ['Lavandería', AreaType.LaundryRoom],
+    ['Balcón', AreaType.Balcony],
+    ['Estudio', AreaType.Study],
+    ['Comedor', AreaType.Dining],
+    ['Living room', AreaType.LivingRoom],
+  ])('%s → %i', (name, type) => {
+    expect(inferAreaType(name)).toBe(type);
+  });
+
+  it('returns null for names it cannot classify', () => {
+    expect(inferAreaType('Room 5')).toBeNull();
+    expect(inferAreaType('Saladero')).toBeNull();
   });
 });

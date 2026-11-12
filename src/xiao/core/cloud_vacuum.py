@@ -142,7 +142,39 @@ class CloudVacuumService:
 
     # ── Core actions ──────────────────────────────────────────────
 
+    # Seconds between status checks while waiting for mop drying to stop.
+    DRYING_POLL_SECONDS = 2.0
+    DRYING_POLL_ATTEMPTS = 8
+
+    def cancel_drying(self, sleep_fn: Any = None) -> bool:
+        """Stop mop drying before a new job, like the Mi Home app asks to.
+
+        While drying, the X20+ acknowledges a start command and ignores it, so a
+        Home/Siri request would silently do nothing. Returns True when drying was
+        stopped. Best effort: failures to read status leave things as they are.
+        """
+        import time
+
+        sleep = sleep_fn or time.sleep
+        try:
+            if self.status().get("state") != "Drying":
+                return False
+        except Exception as e:  # pragma: no cover - network dependent
+            logger.debug("could not read status before starting: %s", e)
+            return False
+        logger.info("Vacuum is drying the mop; stopping drying before starting a clean")
+        self.stop_dry()
+        for _ in range(self.DRYING_POLL_ATTEMPTS):
+            sleep(self.DRYING_POLL_SECONDS)
+            try:
+                if self.status().get("state") != "Drying":
+                    break
+            except Exception:  # pragma: no cover - network dependent
+                continue
+        return True
+
     def start(self) -> dict:
+        self.cancel_drying()
         a = MIOT_ACTIONS["start_clean"]
         return cloud_call_action(self.cloud, self.did, a["siid"], a["aiid"], country=self.country)
 
@@ -1064,6 +1096,7 @@ class CloudVacuumService:
     ) -> dict:
         """Clean rooms in order; fan/water default to the robot's current settings."""
         self._local()  # fail fast (LocalUnreachableError) before any cloud reads
+        self.cancel_drying()
         fan_raw, water_raw = self._resolve_fan_water(fan, water)
         selects = [[int(rid), max(1, repeat), fan_raw, water_raw, order] for order, rid in enumerate(room_ids, 1)]
         return self.start_clean_local(self.DREAME_WORK_MODE_ROOMS, {"selects": selects})
@@ -1073,6 +1106,7 @@ class CloudVacuumService:
     ) -> dict:
         """Clean rectangles ``[x1, y1, x2, y2]`` (map mm)."""
         self._local()
+        self.cancel_drying()
         fan_raw, water_raw = self._resolve_fan_water(fan, water)
         areas = [[*zone, max(1, repeat), fan_raw, water_raw] for zone in zones]
         return self.start_clean_local(self.DREAME_WORK_MODE_ZONES, {"areas": areas})
@@ -1088,6 +1122,7 @@ class CloudVacuumService:
         """
         if repeat != 1:
             logger.info("start-room-sweep has no repeat input; ignoring repeat=%d", repeat)
+        self.cancel_drying()
         a = MIOT_ACTIONS["start_room_sweep"]
         room_str = ",".join(str(r) for r in room_ids)
         return cloud_call_action(

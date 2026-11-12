@@ -31,7 +31,14 @@ iPhone / HomePod ──Matter (LAN)──▶ Matterbridge + matterbridge-xiao �
 Rooms come from `xiao map rooms`: room ID → Matter area ID, and the xiao alias
 becomes the name Siri understands. Zones from the plugin config become extra
 "rooms". The X20+ can't mix rooms and zones in one job, so if both are
-selected, the rooms are cleaned and the zones are skipped (the log says so).
+selected, the rooms are cleaned and the zones are skipped (the log says so). Each room also gets a Matter area type
+(kitchen, bathroom, bedroom, living room, hallway, laundry, balcony, study…)
+inferred from its Spanish or English name, so Home can relate it to your Home
+rooms.
+
+If the robot is drying its mop, starting a clean first stops the drying, as the
+Mi Home app asks you to do. Otherwise the X20+ acknowledges the start and
+ignores it.
 
 ## Requirements
 
@@ -57,6 +64,11 @@ creates two LaunchAgents that start at login:
 
 - `com.xiao.web`: `xiao web --port 8120` on 127.0.0.1. Logs go to `~/Library/Logs/xiao-web.log`.
 - `com.xiao.matterbridge`: Matterbridge. The UI is at http://127.0.0.1:8283 and logs go to `~/Library/Logs/matterbridge.log`.
+
+The installer pins Matter's mDNS to the default-route interface (usually `en0`)
+because VPN interfaces such as Tailscale's `utun*` can make Home show "No
+Response". Override it with `MDNS_INTERFACE=en1 …/install-macos.sh`, or disable
+it with `MDNS_INTERFACE=`.
 
 If macOS asks whether `node` may accept incoming connections, choose **Allow**.
 Matter needs that.

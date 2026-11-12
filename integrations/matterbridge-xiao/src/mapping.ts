@@ -60,9 +60,65 @@ export interface ZoneConfig {
 export interface AreaEntry {
   areaId: number;
   name: string;
+  /** Matter Common Area namespace tag (kitchen, bathroom…), or null when unknown. */
+  areaType?: number | null;
   kind: 'room' | 'zone';
   roomId?: number;
   zone?: ZoneRect;
+}
+
+// Matter "Common Area" semantic tags (ServiceArea LocationDescriptor.areaType).
+// Fixed by the Matter spec; duplicated here so the mapping stays testable without matter.js.
+export const AreaType = {
+  Balcony: 4,
+  Bathroom: 6,
+  Bedroom: 7,
+  Dining: 21,
+  Entryway: 28,
+  Garage: 34,
+  Hallway: 43,
+  Kitchen: 47,
+  LaundryRoom: 49,
+  LivingRoom: 52,
+  Office: 58,
+  Patio: 64,
+  PrimaryBathroom: 68,
+  PrimaryBedroom: 69,
+  Study: 88,
+  Terrace: 91,
+} as const;
+
+// First match wins, so the more specific patterns come first. Names are matched
+// lower-cased and without accents ("Baño" → "bano").
+const AREA_TYPE_PATTERNS: [RegExp, number][] = [
+  [/\b(bano|bath(room)?|aseo)\b.*\b(principal|master|primary)\b/, AreaType.PrimaryBathroom],
+  [/\b(habitacion|dormitorio|alcoba|cuarto|recamara|bed ?room)\b.*\b(principal|master|primary)\b|\b(master|primary) bed ?room\b/, AreaType.PrimaryBedroom],
+  [/\b(cocina|kitchen)\b/, AreaType.Kitchen],
+  [/\b(bano|bath(room)?|aseo|toilet|wc)\b/, AreaType.Bathroom],
+  [/\b(habitacion|dormitorio|alcoba|cuarto|recamara|bed ?room)\b/, AreaType.Bedroom],
+  [/\b(sala|salon|living( room)?|estar)\b/, AreaType.LivingRoom],
+  [/\b(comedor|dining( room)?)\b/, AreaType.Dining],
+  [/\b(pasillo|corredor|hall(way)?)\b/, AreaType.Hallway],
+  [/\b(lavanderia|laundry( room)?|ropas)\b/, AreaType.LaundryRoom],
+  [/\b(balcon|balcony)\b/, AreaType.Balcony],
+  [/\b(terraza|terrace)\b/, AreaType.Terrace],
+  [/\b(patio)\b/, AreaType.Patio],
+  [/\b(estudio|study)\b/, AreaType.Study],
+  [/\b(oficina|despacho|office)\b/, AreaType.Office],
+  [/\b(entrada|recibidor|entry(way)?|foyer)\b/, AreaType.Entryway],
+  [/\b(garaje|garage)\b/, AreaType.Garage],
+];
+
+/** Guess the Matter area type from a room name in Spanish or English. */
+export function inferAreaType(name: string): number | null {
+  const folded = name
+    .normalize('NFD')
+    .replace(/\p{Diacritic}/gu, '')
+    .toLowerCase();
+  for (const [pattern, type] of AREA_TYPE_PATTERNS) {
+    if (pattern.test(folded)) return type;
+  }
+  return null;
 }
 
 export function parseZoneCoords(raw: string): ZoneRect {
@@ -93,13 +149,19 @@ export function buildAreas(rooms: XiaoRoom[], zones: ZoneConfig[] = [], roomName
     if (!Number.isInteger(room.id) || room.id < 0 || room.id >= ZONE_AREA_ID_BASE) continue;
     const name = (roomNames[String(room.id)] ?? room.name ?? `Room ${room.id}`).trim();
     addName(name);
-    areas.push({ areaId: room.id, name, kind: 'room', roomId: room.id });
+    areas.push({ areaId: room.id, name, kind: 'room', roomId: room.id, areaType: inferAreaType(name) });
   }
   zones.forEach((zone, index) => {
     const name = zone.name.trim();
     if (!name) throw new Error(`Zone #${index + 1} has no name`);
     addName(name);
-    areas.push({ areaId: ZONE_AREA_ID_BASE + index + 1, name, kind: 'zone', zone: parseZoneCoords(zone.coords) });
+    areas.push({
+      areaId: ZONE_AREA_ID_BASE + index + 1,
+      name,
+      kind: 'zone',
+      zone: parseZoneCoords(zone.coords),
+      areaType: inferAreaType(name),
+    });
   });
   return areas;
 }
@@ -110,7 +172,7 @@ export function toMatterAreas(areas: AreaEntry[]) {
     areaId: area.areaId,
     mapId: null,
     areaInfo: {
-      locationInfo: { locationName: area.name.slice(0, 128), floorNumber: null, areaType: null },
+      locationInfo: { locationName: area.name.slice(0, 128), floorNumber: null, areaType: area.areaType ?? null },
       landmarkInfo: null,
     },
   }));

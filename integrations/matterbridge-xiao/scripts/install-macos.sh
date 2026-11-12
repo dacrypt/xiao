@@ -15,6 +15,10 @@ XIAO_PORT="${XIAO_PORT:-8120}"
 # XIAO_HOST=0.0.0.0 exposes xiao web to the LAN (needed by Siri Shortcuts); it then requires
 # the token saved in config.toml ([web] token) from other machines.
 XIAO_HOST="${XIAO_HOST:-127.0.0.1}"
+# Matter announces itself over mDNS; with VPN interfaces (utun*, Tailscale) around,
+# Matterbridge may pick the wrong one and Home shows "No Response". Default: the
+# interface of the default route (usually en0, the Wi-Fi). MDNS_INTERFACE= to disable.
+MDNS_INTERFACE="${MDNS_INTERFACE-$(route -n get default 2>/dev/null | awk '/interface:/{print $2}')}"
 AGENTS="$HOME/Library/LaunchAgents"
 LOGS="$HOME/Library/Logs"
 PLUGIN_DIR="$(cd "$(dirname "$0")/.." && pwd)"
@@ -77,6 +81,13 @@ cat > "$AGENTS/com.xiao.web.plist" <<EOF
 </dict></plist>
 EOF
 
+MDNS_ARGS=""
+if [[ -n "$MDNS_INTERFACE" ]]; then
+  echo "→ Matter mDNS on interface $MDNS_INTERFACE"
+  MDNS_ARGS="
+    <string>--mdnsinterface</string><string>$MDNS_INTERFACE</string>"
+fi
+
 cat > "$AGENTS/com.xiao.matterbridge.plist" <<EOF
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -85,7 +96,7 @@ cat > "$AGENTS/com.xiao.matterbridge.plist" <<EOF
   <key>ProgramArguments</key><array>
     <string>$NODE</string><string>$MATTERBRIDGE</string>
     <string>--service</string><string>--nosudo</string><string>--no-ansi</string>
-    <string>--bind</string><string>127.0.0.1</string>
+    <string>--bind</string><string>127.0.0.1</string>$MDNS_ARGS
   </array>
   <key>EnvironmentVariables</key><dict><key>PATH</key><string>$PATH_ENV</string></dict>
   <key>RunAtLoad</key><true/>

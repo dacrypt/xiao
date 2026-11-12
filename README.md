@@ -262,6 +262,10 @@ xiao clean -r 3 -w high           # Living Room with high water (heavy mop)
 > LAN IP the cloud reports. The machine running `xiao` must be on the same
 > network as the robot; if it can't reach it, `xiao` falls back to the cloud
 > action and warns that the robot may ignore it.
+>
+> If the robot is drying its mop, `xiao` stops the drying before starting any
+> clean (rooms, zones or the whole house), like the Mi Home app does. While
+> drying, the X20+ acknowledges a start and ignores it.
 
 ### Room Management
 
