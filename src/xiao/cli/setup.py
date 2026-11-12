@@ -338,7 +338,7 @@ def _run_browser_login() -> None:
     rprint(
         Panel(
             "[bold]A Chromium window will open at account.xiaomi.com.[/bold]\n"
-            "Log in (solve captcha / 2FA if prompted), then close the window.\n"
+            "Log in (solve captcha / 2FA if prompted); the window closes by itself once the session is saved.\n"
             f"Session data is stored privately under [cyan]{PROFILE_DIR}[/cyan].",
             border_style="cyan",
         )
@@ -356,7 +356,7 @@ def _run_browser_login() -> None:
         rprint("[green]✓ Browser session saved. Token refresh will be silent from now on.[/green]")
     else:
         rprint(
-            "[yellow]Window closed before a logged-in URL was detected. "
+            "[yellow]Window closed before a Xiaomi session was detected. "
             "You can rerun [bold]xiao setup browser-login[/bold] anytime.[/yellow]"
         )
 

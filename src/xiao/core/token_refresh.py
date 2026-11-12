@@ -36,8 +36,12 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 PROFILE_DIR = CONFIG_DIR / "chromium"
-LOGIN_LANDING = "https://account.xiaomi.com/pass/login"
-LOGIN_SUCCESS_HOSTS = ("home.mi.com", "i.mi.com", "account.xiaomi.com/success")
+# The account root redirects to the current login form. (`/pass/login` now 404s.)
+LOGIN_LANDING = "https://account.xiaomi.com/"
+# Long-lived cookie that serviceLogin needs for a silent refresh. Its presence is
+# the login signal: URLs are not reliable (i.mi.com renders without a session).
+SESSION_COOKIE_URL = "https://account.xiaomi.com"
+SESSION_COOKIE_NAME = "passToken"
 
 
 def _ensure_profile_dir() -> None:
@@ -204,13 +208,21 @@ def _refresh_tokens_blocking(username: str, password: str) -> dict[str, str] | N
     return _refresh_via_persistent(username, password)
 
 
+def _has_session_cookie(context) -> bool:
+    try:
+        cookies = context.cookies(SESSION_COOKIE_URL)
+    except Exception:
+        return False
+    return any(c.get("name") == SESSION_COOKIE_NAME and c.get("value") for c in cookies)
+
+
 def seed_browser_session() -> bool:
     """Launch a headed Chromium against the login page and wait for the user
     to finish logging in. Stores cookies in `PROFILE_DIR` so future token
     refreshes can run headless.
 
-    Returns True once the user lands on a logged-in host (home.mi.com,
-    i.mi.com, or account.xiaomi.com/success) or closes the window manually.
+    Returns True once the profile holds a `passToken` session cookie; False if
+    the window is closed before that.
     """
     try:
         from playwright.sync_api import sync_playwright
@@ -229,14 +241,14 @@ def seed_browser_session() -> bool:
 
         logged_in = False
         try:
-            # Poll the URL every second; exit on success redirect or window close.
+            # Poll every second; exit once the session cookie appears or every
+            # page is closed (on macOS closing the window leaves the app running,
+            # and a closed page's `.url` never raises, so check pages instead).
             while True:
-                try:
-                    url = page.url
-                except Exception:
-                    break  # window closed
-                if any(h in url for h in LOGIN_SUCCESS_HOSTS) and "/pass/login" not in url:
+                if _has_session_cookie(context):
                     logged_in = True
+                    break
+                if not any(not pg.is_closed() for pg in context.pages):
                     break
                 time.sleep(1)
         finally:

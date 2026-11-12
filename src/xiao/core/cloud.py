@@ -598,7 +598,7 @@ class XiaomiCloud:
         if resp.status_code == 200:
             decoded = decrypt_rc4(s_nonce, resp.text)
             return decoded.decode("utf-8")
-        if resp.status_code in (401, 403):
+        if resp.status_code in TOKEN_EXPIRED_STATUSES:
             raise TokenExpiredError(f"Token expired (HTTP {resp.status_code})")
         raise RuntimeError(f"Signed request failed: {resp.status_code}")
 
@@ -615,9 +615,14 @@ class XiaomiCloud:
         )
         if resp.status_code == 200:
             return resp.text
-        if resp.status_code in (401, 403):
+        if resp.status_code in TOKEN_EXPIRED_STATUSES:
             raise TokenExpiredError(f"Token expired (HTTP {resp.status_code})")
         raise RuntimeError(f"Simple request failed: {resp.status_code}")
+
+
+# HTTP statuses the Xiaomi API uses to signal a dead serviceToken. Besides the
+# classic 401/403, the API answers 426 with {"message": "SERVICETOKEN_EXPIRED"}.
+TOKEN_EXPIRED_STATUSES = (401, 403, 426)
 
 
 class TokenExpiredError(Exception):
