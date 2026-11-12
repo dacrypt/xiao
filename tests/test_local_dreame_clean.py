@@ -23,6 +23,16 @@ def _sent_payload(device: MagicMock) -> tuple[int, dict]:
 
 
 class TestCloudVacuumLocalHandshake:
+    def test_backs_off_between_attempts_when_the_host_is_briefly_unreachable(self):
+        svc = _service(local_token="t", local_ip="10.0.0.9")
+        svc.network_info = MagicMock(return_value={})
+        fake = MagicMock()
+        fake.return_value._protocol.send_handshake.side_effect = [OSError("No route to host")] * 3 + [None]
+        with patch("miio.MiotDevice", fake), patch("time.sleep") as sleep:
+            assert svc._local() is fake.return_value
+        assert fake.return_value._protocol.send_handshake.call_count == 4
+        assert [c.args[0] for c in sleep.call_args_list] == [svc.LAN_HANDSHAKE_BACKOFF_SECONDS] * 3
+
     def test_retries_a_dropped_handshake(self):
         svc = _service(local_token="t", local_ip="10.0.0.9")
         svc.network_info = MagicMock(return_value={})

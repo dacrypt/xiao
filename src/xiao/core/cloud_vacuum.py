@@ -1049,6 +1049,9 @@ class CloudVacuumService:
     # robot accepts start-clean with piid 1 = work mode (18 rooms, 19 zones) and
     # piid 10 = the selection, exactly like the Mi Home app.
 
+    LAN_HANDSHAKE_ATTEMPTS = 5
+    LAN_HANDSHAKE_BACKOFF_SECONDS = 1.5
+
     DREAME_WORK_MODE_ROOMS = 18
     DREAME_WORK_MODE_ZONES = 19
 
@@ -1075,10 +1078,16 @@ class CloudVacuumService:
         from miio import MiotDevice
 
         device = MiotDevice(ip=ip, token=self.local_token, timeout=4, mapping={})
-        # miIO is UDP and the robot's Wi-Fi power saving drops the odd packet:
-        # retry the handshake (nothing is sent to the robot until it succeeds).
+        # miIO is UDP and the robot's Wi-Fi power saving drops the odd packet; right
+        # after stop-dry it also stops answering ARP for a second or two, which fails
+        # fast with "No route to host". Retry with a short backoff (nothing is sent to
+        # the robot until the handshake succeeds).
+        import time
+
         last_error: Exception | None = None
-        for _attempt in range(3):
+        for attempt in range(self.LAN_HANDSHAKE_ATTEMPTS):
+            if attempt:
+                time.sleep(self.LAN_HANDSHAKE_BACKOFF_SECONDS)
             try:
                 device._protocol.send_handshake(retry_count=0)
                 break
