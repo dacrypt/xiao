@@ -128,11 +128,17 @@ class CloudVacuumService:
         did: str,
         model: str = "",
         country: str = "us",
+        local_token: str | None = None,
+        local_ip: str | None = None,
     ):
         self.cloud = cloud
         self.did = did
         self.model = model
         self.country = country
+        # Room/zone cleaning on the X20+ only works over the LAN (see clean_rooms_local).
+        self.local_token = local_token or None
+        self.local_ip = local_ip or None
+        self._local_device: Any = None
 
     # ── Core actions ──────────────────────────────────────────────
 
@@ -954,6 +960,103 @@ class CloudVacuumService:
         except Exception:
             pass
         return data
+
+    # ── Room / zone cleaning over the LAN (Dreame start-clean) ────
+    #
+    # The X20+ is Dreame-built. Through the cloud it acknowledges the spec's
+    # start-room-sweep (2/3) with code 0 and then ignores it, and the cloud
+    # rejects the Dreame start-clean (4/1) payload because the published spec
+    # only declares piid 10 (-704220025). Sent over the local miIO protocol, the
+    # robot accepts start-clean with piid 1 = work mode (18 rooms, 19 zones) and
+    # piid 10 = the selection, exactly like the Mi Home app.
+
+    DREAME_WORK_MODE_ROOMS = 18
+    DREAME_WORK_MODE_ZONES = 19
+
+    @property
+    def local_clean_available(self) -> bool:
+        return bool(self.local_token)
+
+    def _local(self) -> Any:
+        from xiao.core.room_cleaning import LocalUnreachableError
+
+        if self._local_device is not None:
+            return self._local_device
+        if not self.local_token:
+            raise LocalUnreachableError("no device token in config.toml")
+        # The DHCP lease can change after setup, so ask the cloud for the current LAN IP first.
+        ip = None
+        try:
+            ip = self.network_info().get("local_ip") or None
+        except Exception as e:  # pragma: no cover - network dependent
+            logger.debug("could not read local_ip from the cloud: %s", e)
+        ip = ip or self.local_ip
+        if not ip:
+            raise LocalUnreachableError("the vacuum's LAN IP is unknown")
+        from miio import MiotDevice
+
+        device = MiotDevice(ip=ip, token=self.local_token, timeout=8, mapping={})
+        try:
+            device._protocol.send_handshake()
+        except Exception as e:
+            raise LocalUnreachableError(f"cannot reach the vacuum at {ip} on the LAN: {e}") from e
+        self._local_device = device
+        return device
+
+    def _current_fan_water(self) -> tuple[int, int]:
+        fan, water = 1, 2
+        for r in cloud_get_properties(
+            self.cloud, self.did, [{"siid": 2, "piid": 3}, MIOT_SPEC["mop_mode"]], country=self.country
+        ):
+            if r.get("code", 0) != 0 or r.get("value") is None:
+                continue
+            if r.get("siid") == 2:
+                fan = int(r["value"])
+            else:
+                water = int(r["value"])
+        return fan, water
+
+    def _resolve_fan_water(self, fan: str | None, water: str | None) -> tuple[int, int]:
+        if fan is not None and fan.lower() not in self.FAN_SPEEDS:
+            raise ValueError(f"Unknown speed: {fan}. Use: {', '.join(self.FAN_SPEEDS)}")
+        if water is not None and water.lower() not in self.WATER_LEVELS:
+            raise ValueError(f"Unknown water level: {water}. Use: {', '.join(self.WATER_LEVELS)}")
+        current_fan, current_water = (1, 2) if fan and water else self._current_fan_water()
+        return (
+            self.FAN_SPEEDS[fan.lower()] if fan else current_fan,
+            self.WATER_LEVELS[water.lower()] if water else current_water,
+        )
+
+    def start_clean_local(self, work_mode: int, data: dict[str, Any]) -> dict:
+        """Send Dreame start-clean (siid 4, aiid 1) over the LAN. Returns the raw device reply."""
+        device = self._local()
+        payload = json.dumps(data, separators=(",", ":"))
+        result = device.send(
+            "action",
+            {
+                "did": f"call-4-1-{work_mode}",
+                "siid": 4,
+                "aiid": 1,
+                "in": [{"piid": 1, "value": work_mode}, {"piid": 10, "value": payload}],
+            },
+        )
+        return result if isinstance(result, dict) else {"code": 0, "result": result}
+
+    def clean_rooms_local(
+        self, room_ids: list[int], repeat: int = 1, fan: str | None = None, water: str | None = None
+    ) -> dict:
+        """Clean rooms in order; fan/water default to the robot's current settings."""
+        fan_raw, water_raw = self._resolve_fan_water(fan, water)
+        selects = [[int(rid), max(1, repeat), fan_raw, water_raw, order] for order, rid in enumerate(room_ids, 1)]
+        return self.start_clean_local(self.DREAME_WORK_MODE_ROOMS, {"selects": selects})
+
+    def clean_zone_local(
+        self, zones: list[list[int]], repeat: int = 1, fan: str | None = None, water: str | None = None
+    ) -> dict:
+        """Clean rectangles ``[x1, y1, x2, y2]`` (map mm)."""
+        fan_raw, water_raw = self._resolve_fan_water(fan, water)
+        areas = [[*zone, max(1, repeat), fan_raw, water_raw] for zone in zones]
+        return self.start_clean_local(self.DREAME_WORK_MODE_ZONES, {"areas": areas})
 
     # ── Room-specific cleaning (MIoT action) ──────────────────────
 

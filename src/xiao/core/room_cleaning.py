@@ -35,6 +35,10 @@ ROOM_CLEAN_IDLE_STATES = {
 }
 
 
+class LocalUnreachableError(RuntimeError):
+    """The LAN path to the vacuum is unavailable; nothing was sent to the robot."""
+
+
 def normalize_zone(coords: list[int]) -> list[int]:
     """Validate a ``[x1, y1, x2, y2]`` rectangle (mm) and return it as ``[min_x, min_y, max_x, max_y]``."""
     if len(coords) != 4:
@@ -85,6 +89,8 @@ def start_room_clean(
     room_ids: list[int],
     *,
     repeat: int = 1,
+    fan: str | None = None,
+    water: str | None = None,
     poll_attempts: int = 3,
     poll_delay_seconds: float = 2.0,
     sleep_fn: Callable[[float], None] = time.sleep,
@@ -95,10 +101,27 @@ def start_room_clean(
       - ``accepted``: Xiaomi/cloud call returned code 0
       - ``verified_started``: True / False / None (inconclusive)
       - ``warning``: human-readable diagnostic when accepted != verified
-      - ``transport``: ``miot`` or ``cloud_rpc``
+      - ``transport``: ``local``, ``miot`` or ``cloud_rpc``
+
+    On the X20+ only the ``local`` transport (Dreame start-clean over the LAN)
+    actually moves the robot; the cloud room actions are acknowledged and ignored.
+    ``fan`` / ``water`` are only honoured by the ``local`` transport.
     """
     status_before = _safe_status(vac)
     before_state = _status_state(status_before)
+    fallback_warning: str | None = None
+
+    if getattr(vac, "local_clean_available", False) is True:
+        try:
+            result = vac.clean_rooms_local(room_ids, repeat=repeat, fan=fan, water=water)
+        except LocalUnreachableError as e:
+            fallback_warning = (
+                f"LAN path unavailable ({e}); fell back to the cloud room action, which the X20+ may ignore."
+            )
+        else:
+            return _finish_room_clean(
+                vac, room_ids, result, "local", status_before, before_state, poll_attempts, poll_delay_seconds, sleep_fn
+            )
 
     # Prefer the official MIoT action; fall back to the legacy RPC only when the
     # service doesn't implement it. Any other error (timeout, auth, rejected
@@ -116,6 +139,25 @@ def start_room_clean(
         transport = "cloud_rpc"
         result = vac.clean_rooms(room_ids, repeat=repeat)
 
+    clean_result = _finish_room_clean(
+        vac, room_ids, result, transport, status_before, before_state, poll_attempts, poll_delay_seconds, sleep_fn
+    )
+    if fallback_warning:
+        clean_result["warning"] = " ".join(w for w in (fallback_warning, clean_result["warning"]) if w)
+    return clean_result
+
+
+def _finish_room_clean(
+    vac: Any,
+    room_ids: list[int],
+    result: Any,
+    transport: str,
+    status_before: dict[str, Any] | None,
+    before_state: str,
+    poll_attempts: int,
+    poll_delay_seconds: float,
+    sleep_fn: Callable[[float], None],
+) -> dict[str, Any]:
     code = extract_code(result)
     accepted = code == 0
     verified_started: bool | None = None

@@ -115,7 +115,9 @@ def clean(
             _fail("Spot clean rejected by the vacuum.", result)
         rprint("[green]Spot cleaning started.[/green]")
     elif room_ids:
-        clean_result = start_room_clean(vac, room_ids, repeat=repeat)
+        clean_result = start_room_clean(
+            vac, room_ids, repeat=repeat, fan=speed.lower() if speed else None, water=water.lower() if water else None
+        )
         if not clean_result["accepted"]:
             _fail(f"Room clean rejected by the vacuum (code {clean_result['code']}).", clean_result["result"])
         rprint(f"[green]Cleaning rooms: {', '.join(room_names)} (x{repeat}).[/green]")

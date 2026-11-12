@@ -490,7 +490,7 @@ def create_app(*, auth_token: str | None = None, loopback_only: bool = True) -> 
                 water_code = extract_code(vac.set_water_level(req.water))
                 if water_code != 0:
                     notes.append(f"water level change rejected (code {water_code})")
-            clean_result = start_room_clean(vac, req.room_ids)
+            clean_result = start_room_clean(vac, req.room_ids, fan=req.fan, water=req.water)
             return {
                 "ok": clean_result["accepted"],
                 "code": clean_result["code"],
