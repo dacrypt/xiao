@@ -92,7 +92,15 @@ def build_cloud_vacuum(notify: Callable[[str], Any] | None = None):
             config.save_cloud_session(cloud.user_id, cloud.service_token, cloud.ssecurity)
             say("Logged in and session saved.")
 
-    return CloudVacuumService(cloud, did=did, model=model, country=server)
+    device = config.load().get("device", {})
+    return CloudVacuumService(
+        cloud,
+        did=did,
+        model=model,
+        country=server,
+        local_token=device.get("token") or None,
+        local_ip=device.get("ip") or None,
+    )
 
 
 def build_vacuum(notify: Callable[[str], Any] | None = None):

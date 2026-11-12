@@ -241,3 +241,52 @@ class TestDashboardSecurity:
             rooms = _client().get("/api/rooms").json()
         assert [r["id"] for r in rooms] == [5, 9]
         assert rooms[1]["name"] == "Kitchen"
+
+
+class TestDashboardZoneClean:
+    def test_zone_clean_normalizes_rectangles_and_forwards_to_vacuum(self):
+        mock_vacuum = MagicMock()
+        mock_vacuum.clean_zone.return_value = {"code": 0}
+
+        with patch("xiao.dashboard.server._get_vacuum", return_value=mock_vacuum):
+            response = _client().post("/api/clean/zone", json={"zones": [[3000, 2000, 1000, 500]]})
+
+        assert response.status_code == 200
+        assert response.json()["ok"] is True
+        assert response.json()["zones"] == [[1000, 500, 3000, 2000]]
+        mock_vacuum.clean_zone.assert_called_once_with([[1000, 500, 3000, 2000]])
+
+    def test_zone_clean_applies_fan_and_water_best_effort(self):
+        mock_vacuum = MagicMock()
+        mock_vacuum.set_fan_speed.return_value = [{"code": -4001}]
+        mock_vacuum.set_water_level.return_value = [{"code": 0}]
+        mock_vacuum.clean_zone.return_value = {"code": 0}
+
+        with patch("xiao.dashboard.server._get_vacuum", return_value=mock_vacuum):
+            response = _client().post(
+                "/api/clean/zone", json={"zones": [[0, 0, 100, 100]], "fan": "turbo", "water": "high"}
+            )
+
+        assert response.status_code == 200
+        assert response.json()["notes"] == ["fan speed change rejected (code -4001)"]
+        mock_vacuum.set_water_level.assert_called_once_with("high")
+
+    @pytest.mark.parametrize("zones", [[[0, 0, 100]], [[0, 0, 0, 100]], []])
+    def test_zone_clean_rejects_malformed_zones_without_calling_vacuum(self, zones):
+        mock_vacuum = MagicMock()
+
+        with patch("xiao.dashboard.server._get_vacuum", return_value=mock_vacuum):
+            response = _client().post("/api/clean/zone", json={"zones": zones})
+
+        assert response.status_code == 422
+        mock_vacuum.clean_zone.assert_not_called()
+
+    def test_zone_clean_reports_vacuum_rejection(self):
+        mock_vacuum = MagicMock()
+        mock_vacuum.clean_zone.return_value = {"code": -9999}
+
+        with patch("xiao.dashboard.server._get_vacuum", return_value=mock_vacuum):
+            response = _client().post("/api/clean/zone", json={"zones": [[0, 0, 100, 100]]})
+
+        assert response.status_code == 200
+        assert response.json()["ok"] is False

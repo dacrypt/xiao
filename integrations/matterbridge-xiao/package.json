@@ -1,0 +1,46 @@
+{
+  "name": "matterbridge-xiao",
+  "version": "0.1.0",
+  "description": "Xiaomi X20+ robot vacuum for Apple Home and Siri via xiao",
+  "license": "MIT",
+  "type": "module",
+  "main": "dist/module.js",
+  "types": "dist/module.d.ts",
+  "files": [
+    "dist",
+    "matterbridge-xiao.schema.json",
+    "README.md"
+  ],
+  "engines": {
+    "node": ">=22.13.0 <23.0.0 || >=24.0.0 <25.0.0 || >=26.0.0 <27.0.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/dacrypt/xiao.git",
+    "directory": "integrations/matterbridge-xiao"
+  },
+  "keywords": [
+    "matterbridge",
+    "matter",
+    "xiaomi",
+    "robot-vacuum",
+    "apple-home",
+    "siri",
+    "xiao"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run"
+  },
+  "devDependencies": {
+    "@types/node": "24.19.2",
+    "typescript": "5.9.3",
+    "vitest": "3.2.7"
+  },
+  "author": "dacrypt",
+  "homepage": "https://github.com/dacrypt/xiao/tree/main/integrations/matterbridge-xiao#readme",
+  "bugs": {
+    "url": "https://github.com/dacrypt/xiao/issues"
+  }
+}

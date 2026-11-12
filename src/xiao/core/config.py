@@ -133,6 +133,26 @@ def get_cloud_session() -> dict | None:
     return None
 
 
+def get_web_token() -> str | None:
+    """Persistent access token for `xiao web` when it listens beyond localhost."""
+    token = load().get("web", {}).get("token")
+    return token if isinstance(token, str) and token else None
+
+
+def ensure_web_token() -> str:
+    """Return the saved web token, creating and saving one on first use."""
+    token = get_web_token()
+    if token:
+        return token
+    import secrets
+
+    token = secrets.token_urlsafe(24)
+    cfg = load()
+    cfg.setdefault("web", {})["token"] = token
+    save(cfg)
+    return token
+
+
 def get_rooms() -> dict[str, str]:
     """Return room aliases: {room_id_str: name}."""
     cfg = load()
@@ -148,6 +168,13 @@ def set_room_alias(room_id: int, name: str) -> None:
     save(cfg)
 
 
+def _fold(text: str) -> str:
+    import unicodedata
+
+    decomposed = unicodedata.normalize("NFKD", text.strip().casefold())
+    return "".join(c for c in decomposed if not unicodedata.combining(c))
+
+
 def resolve_room(identifier: str) -> int:
     """Resolve a room name or ID to a numeric room ID."""
     # Try as integer first
@@ -155,10 +182,11 @@ def resolve_room(identifier: str) -> int:
         return int(identifier)
     except ValueError:
         pass
-    # Search aliases (case-insensitive)
+    # Search aliases (case- and accent-insensitive, so "bano" or "BAÑO" find "Baño")
     rooms = get_rooms()
+    wanted = _fold(identifier)
     for rid, name in rooms.items():
-        if name.lower() == identifier.lower():
+        if _fold(name) == wanted:
             return int(rid)
     raise ValueError(f"Unknown room: '{identifier}'. Use 'xiao rooms' to see available rooms.")
 

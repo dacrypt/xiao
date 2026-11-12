@@ -10,7 +10,7 @@ from rich.console import Console
 
 from xiao.core.config import get_rooms, resolve_room
 from xiao.core.exit_codes import EXIT_GENERIC, EXIT_VACUUM_UNRESPONSIVE
-from xiao.core.room_cleaning import extract_code, start_room_clean
+from xiao.core.room_cleaning import extract_code, normalize_zone, start_room_clean
 
 app = typer.Typer(no_args_is_help=False)
 err_console = Console(stderr=True)
@@ -41,10 +41,7 @@ def parse_zone(raw: str) -> list[int]:
         coords = [int(p) for p in parts]
     except ValueError as e:
         raise ValueError(f"Zone coords must be integers in mm (got {raw!r})") from e
-    x1, y1, x2, y2 = coords
-    if x1 == x2 or y1 == y2:
-        raise ValueError(f"Zone {raw!r} has zero width or height")
-    return [min(x1, x2), min(y1, y2), max(x1, x2), max(y1, y2)]
+    return normalize_zone(coords)
 
 
 @app.callback(invoke_without_command=True)
@@ -118,7 +115,9 @@ def clean(
             _fail("Spot clean rejected by the vacuum.", result)
         rprint("[green]Spot cleaning started.[/green]")
     elif room_ids:
-        clean_result = start_room_clean(vac, room_ids, repeat=repeat)
+        clean_result = start_room_clean(
+            vac, room_ids, repeat=repeat, fan=speed.lower() if speed else None, water=water.lower() if water else None
+        )
         if not clean_result["accepted"]:
             _fail(f"Room clean rejected by the vacuum (code {clean_result['code']}).", clean_result["result"])
         rprint(f"[green]Cleaning rooms: {', '.join(room_names)} (x{repeat}).[/green]")
@@ -131,7 +130,10 @@ def clean(
         if clean_result["verified_started"] is False:
             raise typer.Exit(EXIT_VACUUM_UNRESPONSIVE)
     elif zones:
-        result = vac.clean_zone(zones)
+        try:
+            result = vac.clean_zone(zones, repeat=repeat) if repeat > 1 else vac.clean_zone(zones)
+        except RuntimeError as e:
+            _fail(str(e))
         if extract_code(result) != 0:
             _fail("Zone clean rejected by the vacuum.", result)
         rprint(f"[green]Zone cleaning started: {zones}[/green]")

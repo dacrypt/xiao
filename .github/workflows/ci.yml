@@ -56,6 +56,23 @@ jobs:
       - name: Run tests
         run: uv run pytest tests/ -v
 
+  matterbridge-plugin:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: integrations/matterbridge-xiao
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+      - run: npm ci
+      - name: Link Matterbridge (plugins must not depend on it directly)
+        run: npm install -g matterbridge@3.11.2 && npm link matterbridge
+      - run: npm test
+      - run: npm run typecheck
+      - run: npm run build
+
   package:
     # Build the sdist + wheel exactly like publish.yml, then install the wheel
     # into a clean venv (no dev deps, no source tree) and run the entry point.
