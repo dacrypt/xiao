@@ -20,9 +20,9 @@ iPhone / HomePod ──Matter (LAN)──▶ Matterbridge + matterbridge-xiao �
 | Apple Home / Siri | xiao call |
 |---|---|
 | Start, with no rooms selected ("Clean everywhere") | `POST /api/start` (full house, fan from the clean mode) |
-| Start with rooms selected / «limpia la cocina» | `POST /api/clean/rooms` |
+| Start with rooms selected | `POST /api/clean/rooms` |
 | Start with a configured zone selected | `POST /api/clean/zone` |
-| Return to dock / «manda la aspiradora a la base» | `POST /api/dock` |
+| Return to dock | `POST /api/dock` |
 | Pause | `POST /api/stop` (the X20+ has no pause in cloud mode; Resume starts again) |
 | Clean mode Vacuum & Mop / Quiet / Turbo | fan `standard` / `silent` / `turbo` |
 | Identify / "Play sound" | `POST /api/find` |
@@ -74,7 +74,7 @@ Uninstall with `scripts/install-macos.sh --uninstall`.
 2. iPhone → **Home** → **+** → **Add Accessory** → scan the QR code. Or tap
    **More options…** → choose the accessory → enter the 11-digit code.
 3. Accept "Uncertified accessory". Pick the room where the dock is.
-4. Test it: «Oye Siri, limpia la cocina».
+4. Test it in the Home app: Aspiradora → Habitaciones → Cocina → ▶️.
 
 Don't pair the "Matterbridge" bridge node: it has no devices. Apple Home and
 Siri only control robot vacuums that are their **own** Matter node, which is

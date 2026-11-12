@@ -132,20 +132,25 @@ class TestLoopbackTokenExemption:
 class TestShortcutBuilder:
     def test_default_specs_cover_house_controls_and_each_room(self):
         names = [s.name for s in default_specs(ROOMS)]
-        assert names[:4] == ["Limpia la casa", "Aspiradora a la base", "Detén la aspiradora", "Cómo está la aspiradora"]
-        assert "Limpia la cocina" in names
-        assert "Limpia el baño" in names
-        assert "Limpia la habitación principal" in names
+        assert names[:4] == [
+            "Aspiradora a toda la casa",
+            "Aspiradora a la base",
+            "Detén la aspiradora",
+            "Cómo está la aspiradora",
+        ]
+        assert "Aspiradora a la cocina" in names
+        assert "Aspiradora al baño" in names
+        assert "Aspiradora a la habitación principal" in names
 
     def test_room_shortcuts_send_the_room_id(self):
-        spec = next(s for s in default_specs(ROOMS) if s.name == "Limpia la cocina")
+        spec = next(s for s in default_specs(ROOMS) if s.name == "Aspiradora a la cocina")
         assert spec.body == {"action": "clean", "room": "8", "lang": "es"}
 
     def test_overrides_and_zones(self):
         specs = default_specs(ROOMS, names={"8": "Limpia la cocina vieja"}, zones={"comedor": "0,0,10,10"})
         names = {s.name: s.body for s in specs}
         assert "Limpia la cocina vieja" in names
-        assert names["Limpia el comedor"] == {"action": "clean", "zone": "0,0,10,10", "lang": "es"}
+        assert names["Aspiradora al comedor"] == {"action": "clean", "zone": "0,0,10,10", "lang": "es"}
 
     def test_duplicate_names_are_rejected(self):
         with pytest.raises(ValueError, match="Two shortcuts"):
@@ -171,7 +176,7 @@ class TestShortcutBuilder:
 
     def test_write_unsigned_files_are_private_binary_plists(self, tmp_path):
         files = write_shortcuts(default_specs({"8": "Cocina"}), tmp_path, "http://x:8120", "tok", sign=False)
-        target = tmp_path / "Limpia la cocina.shortcut"
+        target = tmp_path / "Aspiradora a la cocina.shortcut"
         assert target in files
         assert target.stat().st_mode & 0o777 == 0o600
         assert plistlib.loads(target.read_bytes())["WFWorkflowActions"][0]["WFWorkflowActionIdentifier"] == (

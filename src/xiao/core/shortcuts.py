@@ -115,26 +115,39 @@ def _with_article(room: str) -> str:
     return f"{'la' if feminine else 'el'} {room.lower()}"
 
 
+def _to_place(room: str) -> str:
+    """ "a la cocina" / "al baño" (Spanish contracts "a el" to "al")."""
+    with_article = _with_article(room)
+    return "al " + with_article[3:] if with_article.startswith("el ") else "a " + with_article
+
+
 def default_specs(
     rooms: dict[str, str],
     lang: str = "es",
     names: dict[str, str] | None = None,
     zones: dict[str, str] | None = None,
 ) -> list[ShortcutSpec]:
-    """One shortcut per room and zone, plus house / dock / stop / status."""
+    """One shortcut per room and zone, plus house / dock / stop / status.
+
+    Every name starts with "Aspiradora": Siri treats a phrase that mentions a Home
+    room ("limpia la cocina") as a Home command for that room, such as its light,
+    and never gets to the shortcut.
+    """
     names = names or {}
     es = lang == "es"
     specs = [
-        ShortcutSpec("Limpia la casa" if es else "Clean the house", {"action": "clean", "lang": lang}),
+        ShortcutSpec(
+            "Aspiradora a toda la casa" if es else "Vacuum the whole house", {"action": "clean", "lang": lang}
+        ),
         ShortcutSpec("Aspiradora a la base" if es else "Vacuum go home", {"action": "dock", "lang": lang}),
         ShortcutSpec("Detén la aspiradora" if es else "Stop the vacuum", {"action": "stop", "lang": lang}),
         ShortcutSpec("Cómo está la aspiradora" if es else "Vacuum status", {"action": "status", "lang": lang}),
     ]
     for room_id, alias in sorted(rooms.items(), key=lambda item: int(item[0]) if item[0].isdigit() else 0):
-        name = names.get(room_id) or (f"Limpia {_with_article(alias)}" if es else f"Clean the {alias}")
+        name = names.get(room_id) or (f"Aspiradora {_to_place(alias)}" if es else f"Vacuum the {alias}")
         specs.append(ShortcutSpec(name, {"action": "clean", "room": room_id, "lang": lang}))
     for zone_name, coords in (zones or {}).items():
-        name = f"Limpia {_with_article(zone_name)}" if es else f"Clean the {zone_name}"
+        name = f"Aspiradora {_to_place(zone_name)}" if es else f"Vacuum the {zone_name}"
         specs.append(ShortcutSpec(name, {"action": "clean", "zone": coords, "lang": lang}))
     seen: set[str] = set()
     for spec in specs:

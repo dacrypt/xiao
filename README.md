@@ -501,16 +501,20 @@ any **shortcut** by its name, in any language. `xiao` generates one shortcut per
 room, plus house / dock / stop / status. Each one calls `POST /api/voice` on
 `xiao web`, and Siri reads back the answer.
 
+The names all start with «Aspiradora…» («Aspiradora a la cocina»). A phrase that
+names a Home room, like «limpia la cocina», is taken by Siri as a command for
+that room (its light), and the shortcut never runs.
+
 ```bash
 XIAO_HOST=0.0.0.0 integrations/matterbridge-xiao/scripts/install-macos.sh   # xiao web on the LAN (token in config.toml)
 xiao shortcuts export --out ~/Desktop/xiao-shortcuts                        # signed .shortcut files
 ```
 
 AirDrop the files to the iPhone and tap **Agregar atajo** on each one. Then:
-«Oye Siri, limpia la cocina», «Oye Siri, aspiradora a la base», «Oye Siri, cómo
+«Oye Siri, aspiradora a la cocina», «Oye Siri, aspiradora a la base», «Oye Siri, cómo
 está la aspiradora». Options:
 
-- `--name "7=Limpia la cocina nueva"` renames one room's shortcut.
+- `--name "7=Aspiradora a la cocina nueva"` renames one room's shortcut.
 - `--zone "comedor=x1,y1,x2,y2"` adds a zone.
 - `--url http://<tailscale-name>:8120` makes the shortcuts work away from home
   through Tailscale.
