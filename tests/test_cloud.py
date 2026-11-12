@@ -92,3 +92,24 @@ class TestSimpleRequest:
         assert hasattr(XiaomiCloud, "_simple_request")
         # Ensure it's NOT a method of TokenExpiredError
         assert not hasattr(TokenExpiredError, "_simple_request")
+
+
+class TestTokenExpiredStatuses:
+    @pytest.fixture(autouse=True)
+    def _valid_ssecurity(self, mock_cloud):
+        mock_cloud.ssecurity = "c3NlY3VyaXR5LWZvci10ZXN0cw=="  # base64, as the API returns
+
+    @pytest.mark.parametrize("status", [401, 403, 426])
+    @pytest.mark.parametrize("method", ["_signed_request", "_simple_request"])
+    def test_expired_status_raises_token_expired(self, mock_cloud, method, status):
+        """Xiaomi now answers 426 SERVICETOKEN_EXPIRED; it must trigger the
+        refresh path just like 401/403 instead of a generic RuntimeError."""
+        resp = MagicMock(status_code=status, text='{"code":0,"message":"SERVICETOKEN_EXPIRED"}')
+        mock_cloud.session.post.return_value = resp
+        with pytest.raises(TokenExpiredError):
+            getattr(XiaomiCloud, method)(mock_cloud, "https://us.api.io.mi.com/app/x", {"data": "{}"})
+
+    def test_other_status_is_runtime_error(self, mock_cloud):
+        mock_cloud.session.post.return_value = MagicMock(status_code=500, text="")
+        with pytest.raises(RuntimeError):
+            XiaomiCloud._signed_request(mock_cloud, "https://us.api.io.mi.com/app/x", {"data": "{}"})

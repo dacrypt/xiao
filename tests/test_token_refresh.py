@@ -95,8 +95,8 @@ class TestSeedBrowserSession:
         mock_pw_ctx = MagicMock()
         mock_context = MagicMock()
         mock_page = MagicMock()
-        mock_page.url = "https://home.mi.com/dashboard"
         mock_context.pages = [mock_page]
+        mock_context.cookies.return_value = [{"name": "passToken", "value": "abc"}]
         mock_pw_ctx.chromium.launch_persistent_context.return_value = mock_context
 
         with patch("playwright.sync_api.sync_playwright") as mock_sp:
@@ -107,6 +107,47 @@ class TestSeedBrowserSession:
         kwargs = mock_pw_ctx.chromium.launch_persistent_context.call_args.kwargs
         assert kwargs.get("headless") is False
         assert kwargs.get("user_data_dir") == str(token_refresh.PROFILE_DIR)
+
+    def _run(self, context):
+        mock_pw_ctx = MagicMock()
+        mock_pw_ctx.chromium.launch_persistent_context.return_value = context
+        with (
+            patch("playwright.sync_api.sync_playwright") as mock_sp,
+            patch.object(token_refresh.time, "sleep"),
+        ):
+            mock_sp.return_value.__enter__ = MagicMock(return_value=mock_pw_ctx)
+            mock_sp.return_value.__exit__ = MagicMock(return_value=False)
+            return token_refresh.seed_browser_session(), context
+
+    def test_opens_account_root_not_dead_pass_login(self):
+        """/pass/login returns 404 now; the landing must be the account root."""
+        page = MagicMock()
+        context = MagicMock(pages=[page])
+        context.cookies.return_value = [{"name": "passToken", "value": "abc"}]
+        self._run(context)
+        page.goto.assert_called_once()
+        assert page.goto.call_args.args[0] == "https://account.xiaomi.com/"
+
+    def test_success_url_without_cookie_is_not_logged_in(self):
+        """i.mi.com renders without a session; only passToken means logged in.
+        Closing the window (page closed) ends the wait with False."""
+        page = MagicMock()
+        page.url = "https://i.mi.com/"
+        page.is_closed.side_effect = [False, True]
+        context = MagicMock(pages=[page])
+        context.cookies.return_value = [{"name": "deviceId", "value": "x"}]
+        ok, ctx = self._run(context)
+        assert ok is False
+        ctx.close.assert_called_once()
+
+    def test_waits_until_cookie_appears(self):
+        page = MagicMock()
+        page.is_closed.return_value = False
+        context = MagicMock(pages=[page])
+        context.cookies.side_effect = [[], [], [{"name": "passToken", "value": "abc"}]]
+        ok, _ = self._run(context)
+        assert ok is True
+        assert context.cookies.call_count == 3
 
     def test_returns_false_when_playwright_missing(self):
         with patch.dict("sys.modules", {"playwright.sync_api": None}):
