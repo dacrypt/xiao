@@ -459,11 +459,30 @@ curl -s -X POST -H 'X-Xiao-Client: dashboard' http://localhost:8120/api/dock
 | `/stop` | POST | Stop |
 | `/dock` | POST | Return to dock |
 | `/clean/rooms` | POST | `{room_ids, fan, water}` |
+| `/clean/zone` | POST | `{zones: [[x1,y1,x2,y2], …], fan, water}` (mm, same as `xiao clean -z`) |
 | `/wash` | POST | Mop wash |
 | `/dry` | POST | Start/stop dry |
 | `/dust` | POST | Dust collect |
 | `/settings/speed` | POST | `{level: 0-3}` |
 | `/settings/volume` | POST | `{level: 0-100}` |
+
+---
+
+## Apple Home & Siri (Matter)
+
+The X20+ has no Matter firmware and HomeKit has no vacuum service, so `xiao`
+ships a [Matterbridge](https://github.com/Luligu/matterbridge) plugin that
+exposes it as a Matter robot vacuum with your rooms:
+«Oye Siri, limpia la cocina».
+
+```bash
+integrations/matterbridge-xiao/scripts/install-macos.sh
+```
+
+This runs `xiao web` and Matterbridge as login services on the Mac. Then pair
+the **Aspiradora** node from the iPhone Home app (iOS 18.4+; a HomePod or Apple
+TV is needed for remote control). Full guide:
+[integrations/matterbridge-xiao/README.md](integrations/matterbridge-xiao/README.md).
 
 ---
 

@@ -1,0 +1,65 @@
+{
+  "title": "Matterbridge xiao",
+  "description": "Xiaomi Robot Vacuum X20+ for Apple Home and Siri, through the `xiao web` REST API.",
+  "type": "object",
+  "required": [],
+  "properties": {
+    "name": { "description": "Plugin name", "type": "string", "readOnly": true, "ui:widget": "hidden" },
+    "type": { "description": "Plugin type", "type": "string", "readOnly": true, "ui:widget": "hidden" },
+    "deviceName": {
+      "description": "Name of the vacuum in Apple Home (what you say to Siri).",
+      "type": "string",
+      "default": "Aspiradora"
+    },
+    "url": {
+      "description": "Base URL of `xiao web`.",
+      "type": "string",
+      "default": "http://127.0.0.1:8120"
+    },
+    "token": {
+      "description": "X-Xiao-Token, only if `xiao web` runs with --token / XIAO_WEB_TOKEN (not needed on 127.0.0.1).",
+      "type": "string",
+      "default": ""
+    },
+    "serverMode": {
+      "description": "Expose the vacuum as its own Matter node. Apple Home and Siri require this; leave it on.",
+      "type": "boolean",
+      "default": true
+    },
+    "pollIntervalSeconds": {
+      "description": "How often to read the vacuum status (seconds, minimum 5).",
+      "type": "integer",
+      "default": 30
+    },
+    "roomNames": {
+      "description": "Optional per-room names for Siri, overriding the names from `xiao map rooms`.",
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": { "description": "Room ID from `xiao map rooms`", "type": "integer" },
+          "name": { "description": "Name in Apple Home", "type": "string" }
+        }
+      },
+      "default": []
+    },
+    "zones": {
+      "description": "Named rectangles exposed as extra rooms (\"Oye Siri, limpia el comedor\"). Coords as in `xiao clean -z`.",
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "name": { "description": "Name in Apple Home", "type": "string" },
+          "coords": { "description": "x1,y1,x2,y2 in millimetres", "type": "string" }
+        }
+      },
+      "default": []
+    },
+    "debug": { "description": "Enable the debug log for this plugin", "type": "boolean", "default": false },
+    "unregisterOnShutdown": {
+      "description": "Unregister all devices on shutdown (development only)",
+      "type": "boolean",
+      "default": false
+    }
+  }
+}
