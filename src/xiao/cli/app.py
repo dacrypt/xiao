@@ -11,7 +11,7 @@ import typer
 from rich import print as rprint
 from rich.console import Console
 
-from xiao.cli import clean, consumables, device, rooms, schedule, settings, setup
+from xiao.cli import clean, consumables, device, rooms, schedule, settings, setup, shortcuts
 from xiao.cli import doctor as doctor_mod
 from xiao.cli import map as map_cmd
 from xiao.cli._cta import help_epilog, maybe_show_first_run_cta
@@ -86,6 +86,7 @@ app.add_typer(settings.app, name="settings", help="Device settings.")
 app.add_typer(device.app, name="device", help="Device info and history.")
 app.add_typer(map_cmd.app, name="map", help="Map and room management.")
 app.add_typer(rooms.app, name="rooms", help="Room aliases and management.")
+app.add_typer(shortcuts.app, name="shortcuts", help="Siri Shortcuts (Siri in any language).")
 app.command("doctor")(doctor_mod.doctor)
 
 
@@ -364,7 +365,13 @@ def web(
 
     loopback = host in _LOOPBACK
     if not loopback and not token:
-        token = secrets.token_urlsafe(24)
+        # Persist it so Siri shortcuts and other clients keep working across restarts.
+        from xiao.core.config import ensure_web_token
+
+        try:
+            token = ensure_web_token()
+        except OSError:
+            token = secrets.token_urlsafe(24)
 
     shown_host = "localhost" if loopback else host
     url = f"http://{shown_host}:{port}/" + (f"?token={token}" if token else "")
@@ -373,7 +380,8 @@ def web(
     if not loopback:
         rprint(
             f"[yellow]⚠ Listening on {host}: anyone on this network with the token above can control the "
-            "vacuum. Traffic is plain HTTP.[/yellow]"
+            "vacuum. Traffic is plain HTTP. Requests from this machine itself (Host: localhost) don't need "
+            "the token.[/yellow]"
         )
     web_app = create_app(auth_token=token, loopback_only=loopback)
     uvicorn.run(web_app, host=host, port=port, log_level="info")

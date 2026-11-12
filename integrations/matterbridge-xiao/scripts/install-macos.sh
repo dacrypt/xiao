@@ -5,13 +5,16 @@
 #   integrations/matterbridge-xiao/scripts/install-macos.sh --uninstall
 #
 # Creates two LaunchAgents in ~/Library/LaunchAgents:
-#   com.xiao.web          → `xiao web --port 8120` on 127.0.0.1 (REST API for the plugin)
+#   com.xiao.web          → `xiao web --port 8120` on \$XIAO_HOST (default 127.0.0.1; REST API for the plugin)
 #   com.xiao.matterbridge → Matterbridge with the plugin; Matter on UDP/TCP 5540+, UI on 127.0.0.1:8283
 # Logs: ~/Library/Logs/xiao-web.log and ~/Library/Logs/matterbridge.log
 set -euo pipefail
 
 MATTERBRIDGE_VERSION="${MATTERBRIDGE_VERSION:-3.11.2}"
 XIAO_PORT="${XIAO_PORT:-8120}"
+# XIAO_HOST=0.0.0.0 exposes xiao web to the LAN (needed by Siri Shortcuts); it then requires
+# the token saved in config.toml ([web] token) from other machines.
+XIAO_HOST="${XIAO_HOST:-127.0.0.1}"
 AGENTS="$HOME/Library/LaunchAgents"
 LOGS="$HOME/Library/Logs"
 PLUGIN_DIR="$(cd "$(dirname "$0")/.." && pwd)"
@@ -20,6 +23,11 @@ UID_NUM="$(id -u)"
 unload() {
   for label in com.xiao.matterbridge com.xiao.web; do
     launchctl bootout "gui/$UID_NUM/$label" 2>/dev/null || true
+    # bootout is asynchronous: wait until the job is gone or bootstrap fails with EIO.
+    for _ in $(seq 1 50); do
+      launchctl print "gui/$UID_NUM/$label" >/dev/null 2>&1 || break
+      sleep 0.2
+    done
   done
 }
 
@@ -58,7 +66,7 @@ cat > "$AGENTS/com.xiao.web.plist" <<EOF
 <plist version="1.0"><dict>
   <key>Label</key><string>com.xiao.web</string>
   <key>ProgramArguments</key><array>
-    <string>$XIAO</string><string>web</string><string>--port</string><string>$XIAO_PORT</string>
+    <string>$XIAO</string><string>web</string><string>--port</string><string>$XIAO_PORT</string><string>--host</string><string>$XIAO_HOST</string>
   </array>
   <key>EnvironmentVariables</key><dict><key>PATH</key><string>$PATH_ENV</string></dict>
   <key>RunAtLoad</key><true/>

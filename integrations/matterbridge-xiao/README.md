@@ -4,7 +4,7 @@ A [Matterbridge](https://github.com/Luligu/matterbridge) plugin that exposes the
 Xiaomi Robot Vacuum X20+ (`xiaomi.vacuum.c102gl`) as a **Matter robot vacuum**,
 so it shows up in the iPhone **Home** app and Siri can clean rooms:
 
-> «Oye Siri, limpia la cocina» · «Oye Siri, aspira la sala y el baño» · «Oye Siri, manda la aspiradora a la base»
+> In the Home app: pick rooms and press ▶️. By voice: Siri in English («Hey Siri, vacuum the kitchen»), or Siri Shortcuts in Spanish (see «Siri in Spanish»).
 
 The X20+ has no Matter firmware and HomeKit has no vacuum service. This plugin
 fills the gap. It doesn't talk to the Xiaomi cloud itself: it calls the
@@ -105,6 +105,14 @@ Edit it from the Matterbridge UI (plugin → ⚙️), or in
   list without re-pairing.
 - **`token`** is only needed if `xiao web` runs with `--token`. `XIAO_WEB_TOKEN`
   in the environment also works.
+
+## Siri in Spanish
+
+Apple Home's robot-vacuum voice commands only work with Siri in **US English**.
+In Spanish, «Oye Siri, limpia la cocina» goes to another device in the "Cocina"
+room, such as a light. The Home app itself (buttons, rooms, status) works in any
+language. To use your voice in Spanish, generate Siri Shortcuts with
+`xiao shortcuts export` (see the main README, "Siri in Spanish").
 
 ## Troubleshooting
 

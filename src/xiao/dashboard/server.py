@@ -68,6 +68,69 @@ class ZoneCleanRequest(BaseModel):
     water: str | None = None  # low, medium, high
 
 
+class VoiceRequest(BaseModel):
+    """One-string commands for Siri Shortcuts (no JSON arrays needed)."""
+
+    action: Literal["clean", "dock", "stop", "status"] = "clean"
+    room: str | None = None  # alias or id; several separated by commas
+    zone: str | None = None  # "x1,y1,x2,y2" in mm
+    lang: Literal["es", "en"] = "es"
+
+
+_VOICE_TEXT = {
+    "es": {
+        "house": "Listo, la aspiradora va a limpiar toda la casa.",
+        "rooms": "Listo, la aspiradora va a limpiar {rooms}.",
+        "zone": "Listo, la aspiradora va a limpiar la zona.",
+        "dock": "La aspiradora vuelve a la base.",
+        "stop": "Aspiradora detenida.",
+        "status": "La aspiradora está {state}, con {battery}% de batería.",
+        "not_moving": "La aspiradora aceptó la orden pero no se movió. Revisa los tanques de agua.",
+        "rejected": "La aspiradora rechazó la orden (código {code}).",
+        "unknown_room": "No conozco la habitación {room}.",
+        "error": "No pude hablar con la aspiradora: {detail}",
+        "and": " y ",
+    },
+    "en": {
+        "house": "OK, the vacuum will clean the whole house.",
+        "rooms": "OK, the vacuum will clean {rooms}.",
+        "zone": "OK, the vacuum will clean the zone.",
+        "dock": "The vacuum is going back to the dock.",
+        "stop": "Vacuum stopped.",
+        "status": "The vacuum is {state}, battery {battery}%.",
+        "not_moving": "The vacuum accepted the command but did not move. Check the water tanks.",
+        "rejected": "The vacuum rejected the command (code {code}).",
+        "unknown_room": "I don't know the room {room}.",
+        "error": "I couldn't reach the vacuum: {detail}",
+        "and": " and ",
+    },
+}
+
+_STATE_ES = {
+    "Sweeping": "aspirando",
+    "Idle": "inactiva",
+    "Paused": "en pausa",
+    "Error": "con un error",
+    "Go Charging": "volviendo a la base",
+    "Charging": "cargando",
+    "Mopping": "trapeando",
+    "Drying": "secando el trapeador",
+    "Washing mop": "lavando el trapeador",
+    "Go Washing": "yendo a lavar el trapeador",
+    "Building map": "construyendo el mapa",
+    "Sweeping And Mopping": "aspirando y trapeando",
+    "Charging Completed": "en la base, con la carga completa",
+    "Upgrading": "actualizándose",
+    "WashingMopPause": "esperando agua: revisa los tanques",
+    "Dust Collecting": "vaciando el polvo",
+    "Remote Clean": "en limpieza remota",
+}
+
+
+def _join_names(names: list[str], word: str) -> str:
+    return names[0] if len(names) == 1 else ", ".join(names[:-1]) + word + names[-1]
+
+
 # ── Vacuum singleton ─────────────────────────────────────────────
 
 _vacuum_instance = None
@@ -152,7 +215,12 @@ def create_app(*, auth_token: str | None = None, loopback_only: bool = True) -> 
 
         path = request.url.path
         if path.startswith("/api/") and path != "/api/health":
-            if auth_token:
+            # Local clients (the Matterbridge plugin, the dashboard opened on this Mac) skip the
+            # token. Both the peer and the Host header must be loopback: a DNS-rebinding page
+            # reaches 127.0.0.1 too, but with its own hostname in Host.
+            client_ip = request.client.host if request.client else ""
+            local_request = client_ip in _LOOPBACK_HOSTS and host in _LOOPBACK_HOSTS
+            if auth_token and not local_request:
                 supplied = request.headers.get("x-xiao-token", "")
                 if not hmac.compare_digest(supplied, auth_token):
                     return JSONResponse({"detail": "Missing or invalid dashboard token"}, status_code=401)
@@ -526,6 +594,62 @@ def create_app(*, auth_token: str | None = None, loopback_only: bool = True) -> 
         except Exception as e:
             logger.exception("zone clean failed")
             raise HTTPException(500, detail=str(e)) from e
+
+    # ── Siri / voice shortcuts ───────────────────────────────────
+
+    @app.post("/api/voice")
+    def voice(req: VoiceRequest):
+        """Run one spoken command and answer with a sentence for Siri to say.
+
+        Always returns 200 with ``{"ok", "say"}`` so a Shortcut can just speak ``say``.
+        """
+        from xiao.core.config import get_rooms, resolve_room
+
+        text = _VOICE_TEXT[req.lang]
+        aliases = get_rooms()
+        try:
+            if req.action == "clean" and req.room:
+                room_ids: list[int] = []
+                for part in (p.strip() for p in req.room.split(",")):
+                    if not part:
+                        continue
+                    try:
+                        room_ids.append(resolve_room(part))
+                    except ValueError:
+                        return {"ok": False, "say": text["unknown_room"].format(room=part)}
+                if not room_ids:
+                    return {"ok": False, "say": text["unknown_room"].format(room=req.room)}
+                vac = _get_vacuum()
+                clean_result = start_room_clean(vac, room_ids)
+                if not clean_result["accepted"]:
+                    return {"ok": False, "say": text["rejected"].format(code=clean_result["code"])}
+                if clean_result["verified_started"] is False:
+                    return {"ok": False, "say": text["not_moving"]}
+                names = [aliases.get(str(r), str(r)) for r in room_ids]
+                return {"ok": True, "say": text["rooms"].format(rooms=_join_names(names, text["and"]))}
+            if req.action == "clean" and req.zone:
+                try:
+                    zone = normalize_zone([int(c) for c in req.zone.split(",")])
+                except ValueError as e:
+                    return {"ok": False, "say": str(e)}
+                result = _get_vacuum().clean_zone([zone])
+                code = extract_code(result)
+                return {"ok": code == 0, "say": text["zone"] if code == 0 else text["rejected"].format(code=code)}
+            if req.action in ("clean", "dock", "stop"):
+                vac = _get_vacuum()
+                result = {"clean": vac.start, "dock": vac.home, "stop": vac.stop}[req.action]()
+                code = extract_code(result)
+                key = {"clean": "house", "dock": "dock", "stop": "stop"}[req.action]
+                return {"ok": code == 0, "say": text[key] if code == 0 else text["rejected"].format(code=code)}
+            data = _get_vacuum().status()
+            state = str(data.get("state", "Unknown"))
+            shown = _STATE_ES.get(state, state) if req.lang == "es" else state
+            return {"ok": True, "say": text["status"].format(state=shown, battery=data.get("battery", "?"))}
+        except Exception as e:
+            logger.exception("voice command failed")
+            if _is_auth_error(e):
+                _reset_vacuum()
+            return {"ok": False, "say": text["error"].format(detail=str(e)[:160])}
 
     # ── Base station controls ────────────────────────────────────
 

@@ -467,6 +467,7 @@ curl -s -X POST -H 'X-Xiao-Client: dashboard' http://localhost:8120/api/dock
 | `/stop` | POST | Stop |
 | `/dock` | POST | Return to dock |
 | `/clean/rooms` | POST | `{room_ids, fan, water}` |
+| `/voice` | POST | `{action: clean\|dock\|stop\|status, room?, zone?, lang: es\|en}` → `{ok, say}` (for Siri Shortcuts; always 200) |
 | `/clean/zone` | POST | `{zones: [[x1,y1,x2,y2], …], fan, water}` (mm, same as `xiao clean -z`) |
 | `/wash` | POST | Mop wash |
 | `/dry` | POST | Start/stop dry |
@@ -491,6 +492,31 @@ This runs `xiao web` and Matterbridge as login services on the Mac. Then pair
 the **Aspiradora** node from the iPhone Home app (iOS 18.4+; a HomePod or Apple
 TV is needed for remote control). Full guide:
 [integrations/matterbridge-xiao/README.md](integrations/matterbridge-xiao/README.md).
+
+### Siri in Spanish (or any language): Shortcuts
+
+Apple only understands robot-vacuum voice commands in US English, so «Oye Siri,
+limpia la cocina» goes to whatever else is in the "Cocina" room. Siri does run
+any **shortcut** by its name, in any language. `xiao` generates one shortcut per
+room, plus house / dock / stop / status. Each one calls `POST /api/voice` on
+`xiao web`, and Siri reads back the answer.
+
+```bash
+XIAO_HOST=0.0.0.0 integrations/matterbridge-xiao/scripts/install-macos.sh   # xiao web on the LAN (token in config.toml)
+xiao shortcuts export --out ~/Desktop/xiao-shortcuts                        # signed .shortcut files
+```
+
+AirDrop the files to the iPhone and tap **Agregar atajo** on each one. Then:
+«Oye Siri, limpia la cocina», «Oye Siri, aspiradora a la base», «Oye Siri, cómo
+está la aspiradora». Options:
+
+- `--name "7=Limpia la cocina nueva"` renames one room's shortcut.
+- `--zone "comedor=x1,y1,x2,y2"` adds a zone.
+- `--url http://<tailscale-name>:8120` makes the shortcuts work away from home
+  through Tailscale.
+
+The files contain the `xiao web` token, so don't share them. Requests from the
+Mac itself (`localhost`, like the Matterbridge plugin) don't need the token.
 
 ---
 

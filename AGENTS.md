@@ -57,6 +57,7 @@ instead of the managed profile.
 | `xiao map show` | Show raw map metadata from the cloud | — |
 | `xiao rooms alias <id> "<name>"` | Create a friendly-name alias | — |
 | `xiao rooms rename <id-or-old-alias> "<new>"` | Rename | — |
+| `xiao shortcuts export` | Signed Siri shortcuts (one per room + house/dock/stop/status) calling `POST /api/voice` | `--out`, `--url`, `--name ID=TEXT`, `--zone NAME=x1,y1,x2,y2`, `--lang es\|en` |
 | `xiao rooms` | Same room list as `map rooms` (aliases only if not configured) | — |
 | `xiao schedule list` | Show parsed schedules | — |
 | `xiao consumables` | Brush / filter / mop health | `--json` / `-j` |
@@ -99,6 +100,7 @@ instead of the managed profile.
 | "disable DND" | `xiao settings dnd off` |
 | "show consumables" / "health" | `xiao consumables` |
 | "open the dashboard" | `xiao web --port 8120` |
+| "Siri in Spanish" / "Siri shortcuts" | `xiao shortcuts export --out ~/Desktop/xiao-shortcuts` (needs `xiao web --host 0.0.0.0`), then AirDrop the files to the iPhone |
 | "add it to Apple Home" / "Siri" | `integrations/matterbridge-xiao/scripts/install-macos.sh`, then pair the *Aspiradora* code from `~/Library/Logs/matterbridge.log` |
 
 **Rule:** never pass a room ID you haven't just verified with `xiao map rooms`.
