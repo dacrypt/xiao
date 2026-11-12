@@ -999,10 +999,17 @@ class CloudVacuumService:
         from miio import MiotDevice
 
         device = MiotDevice(ip=ip, token=self.local_token, timeout=8, mapping={})
-        try:
-            device._protocol.send_handshake()
-        except Exception as e:
-            raise LocalUnreachableError(f"cannot reach the vacuum at {ip} on the LAN: {e}") from e
+        # miIO is UDP and the robot's Wi-Fi power saving drops the odd packet:
+        # retry the handshake (nothing is sent to the robot until it succeeds).
+        last_error: Exception | None = None
+        for _attempt in range(3):
+            try:
+                device._protocol.send_handshake()
+                break
+            except Exception as e:
+                last_error = e
+        else:
+            raise LocalUnreachableError(f"cannot reach the vacuum at {ip} on the LAN: {last_error}") from last_error
         self._local_device = device
         return device
 

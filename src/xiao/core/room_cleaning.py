@@ -27,6 +27,8 @@ ROOM_CLEAN_IN_PROGRESS_STATES = {
 
 ROOM_CLEAN_IDLE_STATES = {
     "Idle",
+    "Drying",  # at rest in the dock drying the mop; a new job interrupts it
+    "WashingMopPause",
     "Charging",
     "Charging Completed",
     "Go Charging",
@@ -91,8 +93,8 @@ def start_room_clean(
     repeat: int = 1,
     fan: str | None = None,
     water: str | None = None,
-    poll_attempts: int = 3,
-    poll_delay_seconds: float = 2.0,
+    poll_attempts: int = 4,
+    poll_delay_seconds: float = 3.0,
     sleep_fn: Callable[[float], None] = time.sleep,
 ) -> dict[str, Any]:
     """Start room cleaning and try to verify that the robot actually left rest.
@@ -119,9 +121,20 @@ def start_room_clean(
                 f"LAN path unavailable ({e}); fell back to the cloud room action, which the X20+ may ignore."
             )
         else:
-            return _finish_room_clean(
+            clean_result = _finish_room_clean(
                 vac, room_ids, result, "local", status_before, before_state, poll_attempts, poll_delay_seconds, sleep_fn
             )
+            if clean_result["verified_started"] is False:
+                # Observed on a real X20+: the occasional LAN start-clean is acknowledged
+                # while drying and ignored. Re-sending the same job is safe (it's idempotent
+                # while the robot is still at rest) and usually takes.
+                result = vac.clean_rooms_local(room_ids, repeat=repeat, fan=fan, water=water)
+                clean_result = _finish_room_clean(
+                    vac, room_ids, result, "local", None, "", poll_attempts, poll_delay_seconds, sleep_fn
+                )
+                clean_result["status_before"] = status_before
+                clean_result["retried"] = True
+            return clean_result
 
     # Prefer the official MIoT action; fall back to the legacy RPC only when the
     # service doesn't implement it. Any other error (timeout, auth, rejected

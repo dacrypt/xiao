@@ -22,6 +22,17 @@ def _sent_payload(device: MagicMock) -> tuple[int, dict]:
     return mode, data
 
 
+class TestCloudVacuumLocalHandshake:
+    def test_retries_a_dropped_handshake(self):
+        svc = _service(local_token="t", local_ip="10.0.0.9")
+        svc.network_info = MagicMock(return_value={})
+        fake = MagicMock()
+        fake.return_value._protocol.send_handshake.side_effect = [OSError("lost"), None]
+        with patch("miio.MiotDevice", fake):
+            assert svc._local() is fake.return_value
+        assert fake.return_value._protocol.send_handshake.call_count == 2
+
+
 class TestCloudVacuumLocalClean:
     def test_rooms_use_segment_mode_with_ordered_selects(self):
         svc = _service(local_token="t")
@@ -135,3 +146,29 @@ class TestCloudZoneClean:
             svc.clean_zone([[0, 0, 10, 10]])
         rpc.assert_not_called()
         action.assert_not_called()
+
+
+class TestLocalRoomCleanRetry:
+    def test_resends_once_when_the_robot_stays_docked(self):
+        vac = MagicMock()
+        vac.local_clean_available = True
+        vac.status.side_effect = [{"state": "Drying"}] + [{"state": "Drying"}] * 2 + [{"state": "Washing mop"}]
+        vac.clean_rooms_local.return_value = {"code": 0}
+
+        result = start_room_clean(vac, [1], poll_attempts=2, sleep_fn=lambda _s: None)
+
+        assert vac.clean_rooms_local.call_count == 2
+        assert result["verified_started"] is True
+        assert result["retried"] is True
+
+    def test_drying_counts_as_at_rest_so_the_start_is_verified(self):
+        vac = MagicMock()
+        vac.local_clean_available = True
+        vac.status.side_effect = [{"state": "Drying"}, {"state": "Washing mop"}]
+        vac.clean_rooms_local.return_value = {"code": 0}
+
+        result = start_room_clean(vac, [1], sleep_fn=lambda _s: None)
+
+        assert result["verified_started"] is True
+        assert result["warning"] is None
+        vac.clean_rooms_local.assert_called_once()
