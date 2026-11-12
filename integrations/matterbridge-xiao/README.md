@@ -23,7 +23,8 @@ iPhone / HomePod ──Matter (LAN)──▶ Matterbridge + matterbridge-xiao �
 | Start with rooms selected | `POST /api/clean/rooms` |
 | Start with a configured zone selected | `POST /api/clean/zone` |
 | Return to dock | `POST /api/dock` |
-| Pause | `POST /api/stop` (the X20+ has no pause in cloud mode; Resume starts again) |
+| Pause | `POST /api/stop` (the X20+ has no pause in cloud mode) |
+| Resume while paused for water (state 21, shown as Paused) | `POST /api/start`: confirms the refill and continues the job, like the Mi Home app |
 | Clean mode Vacuum & Mop / Quiet / Turbo | fan `standard` / `silent` / `turbo` |
 | Identify / "Play sound" | `POST /api/find` |
 | Status, battery, charging, tank alert | `GET /api/status`, polled every 30 s |

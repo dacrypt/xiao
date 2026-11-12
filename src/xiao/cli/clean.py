@@ -10,7 +10,7 @@ from rich.console import Console
 
 from xiao.core.config import get_rooms, resolve_room
 from xiao.core.exit_codes import EXIT_GENERIC, EXIT_VACUUM_UNRESPONSIVE
-from xiao.core.room_cleaning import extract_code, normalize_zone, start_room_clean
+from xiao.core.room_cleaning import WaitingForWaterError, extract_code, normalize_zone, start_room_clean
 
 app = typer.Typer(no_args_is_help=False)
 err_console = Console(stderr=True)
@@ -115,9 +115,16 @@ def clean(
             _fail("Spot clean rejected by the vacuum.", result)
         rprint("[green]Spot cleaning started.[/green]")
     elif room_ids:
-        clean_result = start_room_clean(
-            vac, room_ids, repeat=repeat, fan=speed.lower() if speed else None, water=water.lower() if water else None
-        )
+        try:
+            clean_result = start_room_clean(
+                vac,
+                room_ids,
+                repeat=repeat,
+                fan=speed.lower() if speed else None,
+                water=water.lower() if water else None,
+            )
+        except WaitingForWaterError as e:
+            _fail(str(e))
         if not clean_result["accepted"]:
             _fail(f"Room clean rejected by the vacuum (code {clean_result['code']}).", clean_result["result"])
         rprint(f"[green]Cleaning rooms: {', '.join(room_names)} (x{repeat}).[/green]")

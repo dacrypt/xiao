@@ -404,7 +404,7 @@ Agents should apply these in order before asking the user.
 |---|---|---|
 | Exit `77`, or stderr contains `token` / `401` / `auth` | Re-run the same command once (silent profile refresh fires on next call) | `xiao setup browser-login`, then `xiao cloud-login` |
 | Exit `1` + `rejected by the vacuum (code N)` | Check `xiao status` (docked? error? state 21?) | Report the code to the user |
-| `State: 21` / `WashingMopPause` | Usually the user refills clean water / empties dirty water, then `xiao start` | Press physical play button on the robot |
+| `State: 21` / `WashingMopPause` | The user refills clean water / empties dirty water, then `xiao start` resumes the paused job | Press physical play button on the robot |
 | `xiao clean -r <id>` returns code 0 but `xiao status` after 10s still shows `Idle`/`Docked` | Fall back to `xiao start` | Report to user |
 | Fan speed set rejected while docked | Start the clean first, then set speed; or pass `--speed` inline on the clean command | — |
 | `xiao map rooms` → "No rooms found" | No room map exposed and no schedule references rooms — get the ID from the Xiaomi Home app and `xiao rooms alias <id> "Name"` | — |
@@ -614,7 +614,7 @@ The X20+ cloud API exposes no room list, so xiao collects room IDs from the devi
 Some MIoT properties are only writable while the robot is off the dock. Start a clean first, or pass `--speed` inline on the `clean` command.
 
 **WashingMopPause (state 21)**
-This is the official X20+ state name. In practice it often means the clean-water tank needs a refill or the dirty-water tank needs emptying at the base. Then `xiao start` to resume. If the robot still sits in state 21, press the physical play button on the top of the robot.
+This is the official X20+ state name: the robot paused its job because the clean-water tank needs a refill or the dirty-water tank needs emptying. The robot can't detect that you did it. In the Mi Home app you confirm it, and `xiao` does the same: `xiao start` (or ▶️ in Apple Home, or «Aspiradora continúa» with Siri) sends Dreame's start-washing confirmation (siid 4, aiid 4, `"1,1"`) over the LAN, and the robot washes the mop and resumes the paused job. New room/zone jobs are refused while it's paused (HTTP 409). If the robot still sits in state 21, press the physical play button on the top of the robot.
 
 ---
 

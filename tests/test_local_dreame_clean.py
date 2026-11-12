@@ -6,7 +6,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from xiao.core.cloud_vacuum import CloudVacuumService
-from xiao.core.room_cleaning import LocalUnreachableError, start_room_clean
+from xiao.core.room_cleaning import LocalUnreachableError, WaitingForWaterError, start_room_clean
 
 
 def _service(**kwargs) -> CloudVacuumService:
@@ -201,3 +201,41 @@ class TestLocalSendSafety:
             svc.start_clean_local(18, {"selects": []})
         assert device.send.call_args.kwargs == {"retry_count": 0}
         assert svc._local_device is None
+
+
+class TestWaterPause:
+    def test_start_resumes_a_job_paused_for_water_over_the_lan(self):
+        svc = _service(local_token="t")
+        svc.status = MagicMock(return_value={"state": "WashingMopPause"})
+        device = MagicMock(send=MagicMock(return_value={"code": 0, "out": []}))
+        svc._local_device = device
+        with patch("xiao.core.cloud_vacuum.cloud_call_action") as cloud:
+            result = svc.start()
+        cloud.assert_not_called()
+        assert result["resumed"] is True
+        method, params = device.send.call_args.args
+        assert (method, params["siid"], params["aiid"], params["in"]) == (
+            "action",
+            4,
+            4,
+            [{"piid": 10, "value": "1,1"}],
+        )
+        assert device.send.call_args.kwargs == {"retry_count": 0}
+
+    def test_start_is_a_normal_full_clean_otherwise(self):
+        svc = _service()
+        svc.status = MagicMock(return_value={"state": "Charging Completed"})
+        with patch("xiao.core.cloud_vacuum.cloud_call_action", return_value={"code": 0}) as cloud:
+            result = svc.start()
+        cloud.assert_called_once()
+        assert "resumed" not in result
+
+    def test_new_room_and_zone_jobs_are_refused_during_the_water_pause(self):
+        svc = _service(local_token="t")
+        svc.status = MagicMock(return_value={"state": "WashingMopPause"})
+        svc._local_device = MagicMock()
+        with pytest.raises(WaitingForWaterError, match="state 21"):
+            svc.clean_rooms_local([8], fan="turbo", water="high")
+        with pytest.raises(WaitingForWaterError):
+            svc.clean_zone_local([[0, 0, 10, 10]], fan="turbo", water="high")
+        svc._local_device.send.assert_not_called()

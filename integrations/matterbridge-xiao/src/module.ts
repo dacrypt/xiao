@@ -189,7 +189,7 @@ export class XiaoPlatform extends MatterbridgeDynamicPlatform {
       })
       .addCommandHandler('RvcRunMode.changeToMode', async ({ request }) => {
         if (request.newMode === RUN_MODE_CLEANING) {
-          await run('Start cleaning', () => controller.startCleaning());
+          await run('Start cleaning', () => controller.resume());
         } else if (request.newMode === RUN_MODE_IDLE && controller.state?.runMode === RUN_MODE_CLEANING) {
           await run('Return to dock', () => controller.goHome());
         }
@@ -198,7 +198,7 @@ export class XiaoPlatform extends MatterbridgeDynamicPlatform {
         await run('Pause', () => controller.stop());
       })
       .addCommandHandler('RvcOperationalState.resume', async () => {
-        await run('Resume', () => controller.startCleaning());
+        await run('Resume', () => controller.resume());
       })
       .addCommandHandler('RvcOperationalState.goHome', async () => {
         await run('Go home', () => controller.goHome());

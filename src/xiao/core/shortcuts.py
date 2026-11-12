@@ -142,6 +142,7 @@ def default_specs(
         ),
         ShortcutSpec("Aspiradora a la base" if es else "Vacuum go home", {"action": "dock", "lang": lang}),
         ShortcutSpec("Detén la aspiradora" if es else "Stop the vacuum", {"action": "stop", "lang": lang}),
+        ShortcutSpec("Aspiradora continúa" if es else "Vacuum resume", {"action": "resume", "lang": lang}),
         ShortcutSpec("Cómo está la aspiradora" if es else "Vacuum status", {"action": "status", "lang": lang}),
     ]
     for room_id, alias in sorted(rooms.items(), key=lambda item: int(item[0]) if item[0].isdigit() else 0):

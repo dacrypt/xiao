@@ -136,7 +136,9 @@ def _report_action(result, success: str, style: str = "green") -> None:
 @app.command()
 def start():
     """Start a full-house clean (the X20+ always washes the mop first)."""
-    _report_action(_vacuum().start(), "Cleaning started.")
+    result = _vacuum().start()
+    resumed = isinstance(result, dict) and result.get("resumed")
+    _report_action(result, "Resumed the job paused for water." if resumed else "Cleaning started.")
 
 
 @app.command()
