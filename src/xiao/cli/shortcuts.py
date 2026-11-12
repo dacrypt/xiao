@@ -39,7 +39,9 @@ def export(
     ),
     port: int = typer.Option(8120, help="Port of `xiao web`, used for the default --url"),
     lang: str = typer.Option("es", help="Shortcut names and Siri's answers: es | en"),
-    name: list[str] = typer.Option(None, "--name", help='Rename a room shortcut: --name "7=Aspiradora a la cocina nueva"'),
+    name: list[str] = typer.Option(
+        None, "--name", help='Rename a room shortcut: --name "7=Aspiradora a la cocina nueva"'
+    ),
     zone: list[str] = typer.Option(None, "--zone", help='Extra zone shortcut: --zone "comedor=x1,y1,x2,y2"'),
     sign: bool = typer.Option(True, "--sign/--no-sign", help="Sign with macOS `shortcuts sign` (needed to import)"),
 ):
