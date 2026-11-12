@@ -303,18 +303,21 @@ class CloudVacuumService:
             country=self.country,
         )
 
-    def clean_zone(self, zones: list[list[int]]) -> dict:
-        """Start zone cleaning via cloud RPC."""
-        from xiao.core.cloud import cloud_rpc
+    def clean_zone(self, zones: list[list[int]], repeat: int = 1) -> dict:
+        """Start zone cleaning over the LAN (Dreame start-clean, work mode 19).
 
-        param = {"zone": zones}
-        return cloud_rpc(
-            self.cloud,
-            self.did,
-            "action",
-            {"did": self.did, "siid": 2, "aiid": 1, "in": [json.dumps(param)]},
-            country=self.country,
-        )
+        There is no cloud fallback: the cloud zone payload this used to send
+        landed on start-sweep and launched a full-house clean instead.
+        Fan and water come from the robot's current settings.
+        """
+        from xiao.core.room_cleaning import LocalUnreachableError
+
+        try:
+            return self.clean_zone_local(zones, repeat=repeat)
+        except LocalUnreachableError as e:
+            raise RuntimeError(
+                f"Zone cleaning needs the LAN path to the vacuum: {e}. Run xiao from a machine on the robot's network."
+            ) from e
 
     def spot_clean(self) -> dict:
         """Spot cleaning is not exposed by the c102gl cloud spec.
@@ -1046,6 +1049,7 @@ class CloudVacuumService:
         self, room_ids: list[int], repeat: int = 1, fan: str | None = None, water: str | None = None
     ) -> dict:
         """Clean rooms in order; fan/water default to the robot's current settings."""
+        self._local()  # fail fast (LocalUnreachableError) before any cloud reads
         fan_raw, water_raw = self._resolve_fan_water(fan, water)
         selects = [[int(rid), max(1, repeat), fan_raw, water_raw, order] for order, rid in enumerate(room_ids, 1)]
         return self.start_clean_local(self.DREAME_WORK_MODE_ROOMS, {"selects": selects})
@@ -1054,6 +1058,7 @@ class CloudVacuumService:
         self, zones: list[list[int]], repeat: int = 1, fan: str | None = None, water: str | None = None
     ) -> dict:
         """Clean rectangles ``[x1, y1, x2, y2]`` (map mm)."""
+        self._local()
         fan_raw, water_raw = self._resolve_fan_water(fan, water)
         areas = [[*zone, max(1, repeat), fan_raw, water_raw] for zone in zones]
         return self.start_clean_local(self.DREAME_WORK_MODE_ZONES, {"areas": areas})

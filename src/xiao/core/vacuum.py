@@ -125,7 +125,7 @@ class VacuumService:
         else:
             dev.segment_clean(room_ids)
 
-    def clean_zone(self, zones: list[list[int]]) -> None:
+    def clean_zone(self, zones: list[list[int]], repeat: int = 1) -> None:
         dev = self._get_device()
         if self._protocol == "genericmiot":
             import json

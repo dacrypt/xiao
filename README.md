@@ -298,7 +298,7 @@ x1,y1,x2,y2
  left    right
 ```
 
-Origin `(0,0)` sits at the center of the map. Rooms typically fall in the `20000–40000` range on each axis. The easiest way to get real numbers is to draw a zone once inside the Xiaomi Home app and copy them.
+On the X20+ (a Dreame-built map) `(0,0)` is near where the map was started, usually the dock, and coordinates can be negative. The easiest way to get real numbers is to draw a zone once inside the Xiaomi Home app and copy them. Like rooms, zones are sent over the LAN (Dreame `start-clean`, work mode 19); there is no cloud fallback.
 
 ```bash
 # Single zone

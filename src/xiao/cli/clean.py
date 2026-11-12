@@ -130,7 +130,10 @@ def clean(
         if clean_result["verified_started"] is False:
             raise typer.Exit(EXIT_VACUUM_UNRESPONSIVE)
     elif zones:
-        result = vac.clean_zone(zones)
+        try:
+            result = vac.clean_zone(zones, repeat=repeat) if repeat > 1 else vac.clean_zone(zones)
+        except RuntimeError as e:
+            _fail(str(e))
         if extract_code(result) != 0:
             _fail("Zone clean rejected by the vacuum.", result)
         rprint(f"[green]Zone cleaning started: {zones}[/green]")

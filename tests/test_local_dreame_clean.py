@@ -112,3 +112,26 @@ class TestStartRoomCleanTransport:
         with pytest.raises(TimeoutError):
             start_room_clean(vac, [8], sleep_fn=lambda _s: None)
         vac.clean_rooms_miot.assert_not_called()
+
+
+class TestCloudZoneClean:
+    def test_clean_zone_goes_over_the_lan(self):
+        svc = _service(local_token="t")
+        svc._local_device = MagicMock(send=MagicMock(return_value={"code": 0}))
+        with patch(
+            "xiao.core.cloud_vacuum.cloud_get_properties",
+            return_value=[{"siid": 2, "piid": 3, "value": 1, "code": 0}, {"siid": 4, "piid": 5, "value": 2, "code": 0}],
+        ):
+            svc.clean_zone([[0, 0, 10, 10]], repeat=2)
+        assert _sent_payload(svc._local_device) == (19, {"areas": [[0, 0, 10, 10, 2, 1, 2]]})
+
+    def test_clean_zone_never_falls_back_to_a_full_house_clean(self):
+        svc = _service()
+        with (
+            patch("xiao.core.cloud.cloud_rpc") as rpc,
+            patch("xiao.core.cloud_vacuum.cloud_call_action") as action,
+            pytest.raises(RuntimeError, match="LAN path"),
+        ):
+            svc.clean_zone([[0, 0, 10, 10]])
+        rpc.assert_not_called()
+        action.assert_not_called()
