@@ -29,6 +29,7 @@ interface ActionResponse {
   ok?: boolean;
   code?: number;
   warning?: string | null;
+  verified_started?: boolean | null;
 }
 
 export type FetchLike = (input: string, init?: RequestInit) => Promise<Response>;
@@ -87,8 +88,13 @@ export class XiaoClient {
     return this.action('/api/settings/speed', { level });
   }
 
-  cleanRooms(roomIds: number[], fan?: FanLevel): Promise<ActionResponse> {
-    return this.action('/api/clean/rooms', { room_ids: roomIds, fan: fan ?? null });
+  async cleanRooms(roomIds: number[], fan?: FanLevel): Promise<ActionResponse> {
+    const result = await this.action('/api/clean/rooms', { room_ids: roomIds, fan: fan ?? null });
+    // xiao accepted the command but saw the robot stay docked: report it so Home/Siri don't say "OK".
+    if (result.verified_started === false) {
+      throw new XiaoApiError(result.warning || 'The vacuum accepted the room clean but did not move');
+    }
+    return result;
   }
 
   cleanZones(zones: ZoneRect[], fan?: FanLevel): Promise<ActionResponse> {

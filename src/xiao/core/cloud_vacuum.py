@@ -998,13 +998,13 @@ class CloudVacuumService:
             raise LocalUnreachableError("the vacuum's LAN IP is unknown")
         from miio import MiotDevice
 
-        device = MiotDevice(ip=ip, token=self.local_token, timeout=8, mapping={})
+        device = MiotDevice(ip=ip, token=self.local_token, timeout=4, mapping={})
         # miIO is UDP and the robot's Wi-Fi power saving drops the odd packet:
         # retry the handshake (nothing is sent to the robot until it succeeds).
         last_error: Exception | None = None
         for _attempt in range(3):
             try:
-                device._protocol.send_handshake()
+                device._protocol.send_handshake(retry_count=0)
                 break
             except Exception as e:
                 last_error = e
@@ -1041,15 +1041,22 @@ class CloudVacuumService:
         """Send Dreame start-clean (siid 4, aiid 1) over the LAN. Returns the raw device reply."""
         device = self._local()
         payload = json.dumps(data, separators=(",", ":"))
-        result = device.send(
-            "action",
-            {
-                "did": f"call-4-1-{work_mode}",
-                "siid": 4,
-                "aiid": 1,
-                "in": [{"piid": 1, "value": work_mode}, {"piid": 10, "value": payload}],
-            },
-        )
+        try:
+            # retry_count=0: python-miio re-sends on a lost UDP reply, which would
+            # restart the job; a lost reply surfaces as an error instead.
+            result = device.send(
+                "action",
+                {
+                    "did": f"call-4-1-{work_mode}",
+                    "siid": 4,
+                    "aiid": 1,
+                    "in": [{"piid": 1, "value": work_mode}, {"piid": 10, "value": payload}],
+                },
+                retry_count=0,
+            )
+        except Exception:
+            self._local_device = None  # re-resolve the IP next time (DHCP may have moved it)
+            raise
         return result if isinstance(result, dict) else {"code": 0, "result": result}
 
     def clean_rooms_local(

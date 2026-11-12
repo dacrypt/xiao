@@ -15,6 +15,7 @@ them once signed (`shortcuts sign`, macOS only).
 
 from __future__ import annotations
 
+import os
 import plistlib
 import re
 import shutil
@@ -176,7 +177,9 @@ def write_shortcuts(
         data = plistlib.dumps(build_workflow(spec, base_url, token), fmt=plistlib.FMT_BINARY)
         if signer:
             unsigned = out_dir / f".{target.stem}.unsigned.shortcut"
-            unsigned.write_bytes(data)
+            fd = os.open(unsigned, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)  # holds the token
+            with os.fdopen(fd, "wb") as handle:
+                handle.write(data)
             try:
                 subprocess.run(
                     [signer, "sign", "--mode", "anyone", "--input", str(unsigned), "--output", str(target)],

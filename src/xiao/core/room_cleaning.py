@@ -37,6 +37,10 @@ ROOM_CLEAN_IDLE_STATES = {
 }
 
 
+# Resting states in which a LAN start-clean has been seen to be ignored once.
+_RESEND_FROM_STATES = {"Drying", "WashingMopPause"}
+
+
 class LocalUnreachableError(RuntimeError):
     """The LAN path to the vacuum is unavailable; nothing was sent to the robot."""
 
@@ -124,10 +128,17 @@ def start_room_clean(
             clean_result = _finish_room_clean(
                 vac, room_ids, result, "local", status_before, before_state, poll_attempts, poll_delay_seconds, sleep_fn
             )
-            if clean_result["verified_started"] is False:
-                # Observed on a real X20+: the occasional LAN start-clean is acknowledged
-                # while drying and ignored. Re-sending the same job is safe (it's idempotent
-                # while the robot is still at rest) and usually takes.
+            if clean_result["verified_started"] is False and before_state in _RESEND_FROM_STATES:
+                # Observed on a real X20+: a LAN start-clean sent while drying the mop was
+                # acknowledged and ignored once. Before re-sending, look again after a pause
+                # so a slow-to-report start is not restarted.
+                sleep_fn(poll_delay_seconds * 2)
+                if _status_state(_safe_status(vac)) not in ROOM_CLEAN_IDLE_STATES:
+                    clean_result["verified_started"] = None
+                    clean_result["warning"] = (
+                        "Room-clean command was accepted; the vacuum left its resting state after a delay."
+                    )
+                    return clean_result
                 result = vac.clean_rooms_local(room_ids, repeat=repeat, fan=fan, water=water)
                 clean_result = _finish_room_clean(
                     vac, room_ids, result, "local", None, "", poll_attempts, poll_delay_seconds, sleep_fn

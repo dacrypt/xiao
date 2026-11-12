@@ -152,7 +152,8 @@ class TestLocalRoomCleanRetry:
     def test_resends_once_when_the_robot_stays_docked(self):
         vac = MagicMock()
         vac.local_clean_available = True
-        vac.status.side_effect = [{"state": "Drying"}] + [{"state": "Drying"}] * 2 + [{"state": "Washing mop"}]
+        # before, 2 verification polls, the re-check before re-sending, then the start
+        vac.status.side_effect = [{"state": "Drying"}] * 4 + [{"state": "Washing mop"}]
         vac.clean_rooms_local.return_value = {"code": 0}
 
         result = start_room_clean(vac, [1], poll_attempts=2, sleep_fn=lambda _s: None)
@@ -172,3 +173,37 @@ class TestLocalRoomCleanRetry:
         assert result["verified_started"] is True
         assert result["warning"] is None
         vac.clean_rooms_local.assert_called_once()
+
+    def test_does_not_resend_when_the_late_recheck_shows_it_started(self):
+        vac = MagicMock()
+        vac.local_clean_available = True
+        vac.status.side_effect = [{"state": "Drying"}] * 3 + [{"state": "Washing mop"}]
+        vac.clean_rooms_local.return_value = {"code": 0}
+
+        result = start_room_clean(vac, [1], poll_attempts=2, sleep_fn=lambda _s: None)
+
+        vac.clean_rooms_local.assert_called_once()
+        assert result["verified_started"] is None
+
+    def test_does_not_resend_from_other_resting_states(self):
+        vac = MagicMock()
+        vac.local_clean_available = True
+        vac.status.return_value = {"state": "Charging Completed"}
+        vac.clean_rooms_local.return_value = {"code": 0}
+
+        result = start_room_clean(vac, [1], poll_attempts=2, sleep_fn=lambda _s: None)
+
+        vac.clean_rooms_local.assert_called_once()
+        assert result["verified_started"] is False
+
+
+class TestLocalSendSafety:
+    def test_start_clean_disables_miio_resends_and_drops_the_cached_device_on_error(self):
+        svc = _service(local_token="t")
+        device = MagicMock()
+        device.send.side_effect = OSError("no reply")
+        svc._local_device = device
+        with pytest.raises(OSError):
+            svc.start_clean_local(18, {"selects": []})
+        assert device.send.call_args.kwargs == {"retry_count": 0}
+        assert svc._local_device is None

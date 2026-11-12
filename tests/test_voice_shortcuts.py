@@ -52,6 +52,13 @@ class TestVoiceEndpoint:
         body = _client().post("/api/voice", json={"room": "garaje"}).json()
         assert body == {"ok": False, "say": "No conozco la habitación garaje."}
 
+    def test_empty_room_never_falls_through_to_a_full_clean(self, rooms):
+        vac = MagicMock()
+        with patch("xiao.dashboard.server._get_vacuum", return_value=vac):
+            body = _client().post("/api/voice", json={"action": "clean", "room": ""}).json()
+        assert body["ok"] is False
+        vac.start.assert_not_called()
+
     def test_robot_that_did_not_move_is_reported(self, rooms):
         with (
             patch("xiao.dashboard.server._get_vacuum"),

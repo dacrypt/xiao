@@ -520,7 +520,9 @@ está la aspiradora». Options:
   through Tailscale.
 
 The files contain the `xiao web` token, so don't share them. Requests from the
-Mac itself (`localhost`, like the Matterbridge plugin) don't need the token.
+Mac itself (`localhost`, like the Matterbridge plugin) don't need the token. Don't
+put a reverse proxy on the same Mac that rewrites `Host` to `localhost`: LAN
+requests would then skip the token.
 
 ---
 

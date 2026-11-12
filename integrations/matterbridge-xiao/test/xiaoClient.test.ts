@@ -39,6 +39,11 @@ describe('XiaoClient', () => {
     expect(JSON.parse(fetchImpl.mock.calls[0][1].body)).toEqual({ level: 0 });
   });
 
+  it('throws when xiao saw the robot stay docked after a room clean', async () => {
+    const fetchImpl = vi.fn().mockResolvedValue(jsonResponse({ ok: true, code: 0, verified_started: false, warning: 'still docked' }));
+    await expect(new XiaoClient({ baseUrl: 'http://x', fetchImpl }).cleanRooms([8])).rejects.toThrow('still docked');
+  });
+
   it('throws when the vacuum rejects an action', async () => {
     const fetchImpl = vi.fn().mockResolvedValue(jsonResponse({ ok: false, code: -9999 }));
     await expect(new XiaoClient({ baseUrl: 'http://x', fetchImpl }).start()).rejects.toThrow(/rejected by the vacuum \(code -9999\)/);

@@ -608,7 +608,7 @@ def create_app(*, auth_token: str | None = None, loopback_only: bool = True) -> 
         text = _VOICE_TEXT[req.lang]
         aliases = get_rooms()
         try:
-            if req.action == "clean" and req.room:
+            if req.action == "clean" and req.room is not None:
                 room_ids: list[int] = []
                 for part in (p.strip() for p in req.room.split(",")):
                     if not part:
@@ -627,7 +627,7 @@ def create_app(*, auth_token: str | None = None, loopback_only: bool = True) -> 
                     return {"ok": False, "say": text["not_moving"]}
                 names = [aliases.get(str(r), str(r)) for r in room_ids]
                 return {"ok": True, "say": text["rooms"].format(rooms=_join_names(names, text["and"]))}
-            if req.action == "clean" and req.zone:
+            if req.action == "clean" and req.zone is not None:
                 try:
                     zone = normalize_zone([int(c) for c in req.zone.split(",")])
                 except ValueError as e:
