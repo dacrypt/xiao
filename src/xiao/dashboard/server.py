@@ -15,7 +15,7 @@ from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse, JSONResponse
 from pydantic import BaseModel, Field
 
-from xiao.core.room_cleaning import extract_code, start_room_clean
+from xiao.core.room_cleaning import extract_code, normalize_zone, start_room_clean
 
 logger = logging.getLogger(__name__)
 
@@ -58,6 +58,12 @@ class WaterRequest(BaseModel):
 
 class RoomCleanRequest(BaseModel):
     room_ids: list[int] = Field(min_length=1)
+    fan: str | None = None  # silent, standard, medium, turbo
+    water: str | None = None  # low, medium, high
+
+
+class ZoneCleanRequest(BaseModel):
+    zones: list[list[int]] = Field(min_length=1)  # each [x1, y1, x2, y2] in mm
     fan: str | None = None  # silent, standard, medium, turbo
     water: str | None = None  # low, medium, high
 
@@ -497,6 +503,28 @@ def create_app(*, auth_token: str | None = None, loopback_only: bool = True) -> 
             }
         except Exception as e:
             logger.exception("room clean failed")
+            raise HTTPException(500, detail=str(e)) from e
+
+    @app.post("/api/clean/zone")
+    def clean_zone(req: ZoneCleanRequest):
+        try:
+            zones = [normalize_zone(z) for z in req.zones]
+        except ValueError as e:
+            raise HTTPException(422, detail=str(e)) from e
+        try:
+            vac = _get_vacuum()
+            notes = []
+            if req.fan:
+                fan_code = extract_code(vac.set_fan_speed(req.fan))
+                if fan_code != 0:
+                    notes.append(f"fan speed change rejected (code {fan_code})")
+            if req.water:
+                water_code = extract_code(vac.set_water_level(req.water))
+                if water_code != 0:
+                    notes.append(f"water level change rejected (code {water_code})")
+            return _action_response(vac.clean_zone(zones), zones=zones, notes=notes)
+        except Exception as e:
+            logger.exception("zone clean failed")
             raise HTTPException(500, detail=str(e)) from e
 
     # ── Base station controls ────────────────────────────────────

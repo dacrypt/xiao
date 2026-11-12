@@ -10,7 +10,7 @@ from rich.console import Console
 
 from xiao.core.config import get_rooms, resolve_room
 from xiao.core.exit_codes import EXIT_GENERIC, EXIT_VACUUM_UNRESPONSIVE
-from xiao.core.room_cleaning import extract_code, start_room_clean
+from xiao.core.room_cleaning import extract_code, normalize_zone, start_room_clean
 
 app = typer.Typer(no_args_is_help=False)
 err_console = Console(stderr=True)
@@ -41,10 +41,7 @@ def parse_zone(raw: str) -> list[int]:
         coords = [int(p) for p in parts]
     except ValueError as e:
         raise ValueError(f"Zone coords must be integers in mm (got {raw!r})") from e
-    x1, y1, x2, y2 = coords
-    if x1 == x2 or y1 == y2:
-        raise ValueError(f"Zone {raw!r} has zero width or height")
-    return [min(x1, x2), min(y1, y2), max(x1, x2), max(y1, y2)]
+    return normalize_zone(coords)
 
 
 @app.callback(invoke_without_command=True)

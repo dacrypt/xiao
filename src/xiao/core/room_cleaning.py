@@ -35,6 +35,16 @@ ROOM_CLEAN_IDLE_STATES = {
 }
 
 
+def normalize_zone(coords: list[int]) -> list[int]:
+    """Validate a ``[x1, y1, x2, y2]`` rectangle (mm) and return it as ``[min_x, min_y, max_x, max_y]``."""
+    if len(coords) != 4:
+        raise ValueError(f"Zone must have 4 coords x1,y1,x2,y2 (got {coords!r})")
+    x1, y1, x2, y2 = (int(c) for c in coords)
+    if x1 == x2 or y1 == y2:
+        raise ValueError(f"Zone {coords!r} has zero width or height")
+    return [min(x1, x2), min(y1, y2), max(x1, x2), max(y1, y2)]
+
+
 def extract_code(result: Any) -> int:
     """Normalize a Xiaomi cloud / miIO response to a single status code.
 
