@@ -148,53 +148,47 @@ class TestCloudZoneClean:
         action.assert_not_called()
 
 
-class TestLocalRoomCleanRetry:
-    def test_resends_once_when_the_robot_stays_docked(self):
-        vac = MagicMock()
-        vac.local_clean_available = True
-        # before, 2 verification polls, the re-check before re-sending, then the start
-        vac.status.side_effect = [{"state": "Drying"}] * 4 + [{"state": "Washing mop"}]
-        vac.clean_rooms_local.return_value = {"code": 0}
+class TestCancelDrying:
+    def _svc(self, states):
+        svc = _service(local_token="t")
+        svc.status = MagicMock(side_effect=[{"state": st} for st in states])
+        svc.stop_dry = MagicMock(return_value={"code": 0})
+        return svc
 
-        result = start_room_clean(vac, [1], poll_attempts=2, sleep_fn=lambda _s: None)
+    def test_stops_drying_and_waits_until_it_ends(self):
+        svc = self._svc(["Drying", "Drying", "Charging Completed"])
+        assert svc.cancel_drying(sleep_fn=lambda _s: None) is True
+        svc.stop_dry.assert_called_once()
+        assert svc.status.call_count == 3
 
-        assert vac.clean_rooms_local.call_count == 2
-        assert result["verified_started"] is True
-        assert result["retried"] is True
+    def test_leaves_a_robot_that_is_not_drying_alone(self):
+        svc = self._svc(["Charging Completed"])
+        assert svc.cancel_drying(sleep_fn=lambda _s: None) is False
+        svc.stop_dry.assert_not_called()
 
-    def test_drying_counts_as_at_rest_so_the_start_is_verified(self):
-        vac = MagicMock()
-        vac.local_clean_available = True
-        vac.status.side_effect = [{"state": "Drying"}, {"state": "Washing mop"}]
-        vac.clean_rooms_local.return_value = {"code": 0}
+    def test_gives_up_waiting_after_the_poll_budget(self):
+        svc = self._svc(["Drying"] * 20)
+        assert svc.cancel_drying(sleep_fn=lambda _s: None) is True
+        assert svc.status.call_count == 1 + svc.DRYING_POLL_ATTEMPTS
 
-        result = start_room_clean(vac, [1], sleep_fn=lambda _s: None)
+    def test_room_and_zone_cleans_cancel_drying_before_sending(self):
+        svc = _service(local_token="t")
+        calls = []
+        svc._local_device = MagicMock(send=MagicMock(side_effect=lambda *a, **k: calls.append("send") or {"code": 0}))
+        svc.cancel_drying = MagicMock(side_effect=lambda: calls.append("cancel") or True)
+        svc.clean_rooms_local([8], fan="turbo", water="high")
+        svc.clean_zone_local([[0, 0, 10, 10]], fan="turbo", water="high")
+        assert calls == ["cancel", "send", "cancel", "send"]
 
-        assert result["verified_started"] is True
-        assert result["warning"] is None
-        vac.clean_rooms_local.assert_called_once()
-
-    def test_does_not_resend_when_the_late_recheck_shows_it_started(self):
-        vac = MagicMock()
-        vac.local_clean_available = True
-        vac.status.side_effect = [{"state": "Drying"}] * 3 + [{"state": "Washing mop"}]
-        vac.clean_rooms_local.return_value = {"code": 0}
-
-        result = start_room_clean(vac, [1], poll_attempts=2, sleep_fn=lambda _s: None)
-
-        vac.clean_rooms_local.assert_called_once()
-        assert result["verified_started"] is None
-
-    def test_does_not_resend_from_other_resting_states(self):
-        vac = MagicMock()
-        vac.local_clean_available = True
-        vac.status.return_value = {"state": "Charging Completed"}
-        vac.clean_rooms_local.return_value = {"code": 0}
-
-        result = start_room_clean(vac, [1], poll_attempts=2, sleep_fn=lambda _s: None)
-
-        vac.clean_rooms_local.assert_called_once()
-        assert result["verified_started"] is False
+    def test_full_start_cancels_drying_first(self):
+        svc = _service()
+        calls = []
+        svc.cancel_drying = MagicMock(side_effect=lambda: calls.append("cancel"))
+        with patch(
+            "xiao.core.cloud_vacuum.cloud_call_action", side_effect=lambda *a, **k: calls.append("start") or {"code": 0}
+        ):
+            svc.start()
+        assert calls == ["cancel", "start"]
 
 
 class TestLocalSendSafety:
