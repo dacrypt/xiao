@@ -481,8 +481,8 @@ curl -s -X POST -H 'X-Xiao-Client: dashboard' http://localhost:8120/api/dock
 
 The X20+ has no Matter firmware and HomeKit has no vacuum service, so `xiao`
 ships a [Matterbridge](https://github.com/Luligu/matterbridge) plugin that
-exposes it as a Matter robot vacuum with your rooms:
-«Oye Siri, limpia la cocina».
+exposes it as a Matter robot vacuum with your rooms in the Home app (voice:
+Siri in US English, or the Shortcuts below in any language).
 
 ```bash
 integrations/matterbridge-xiao/scripts/install-macos.sh
