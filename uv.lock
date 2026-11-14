@@ -1492,6 +1492,7 @@ name = "xiao-cli"
 version = "0.8.1"
 source = { editable = "." }
 dependencies = [
+    { name = "cryptography" },
     { name = "fastapi" },
     { name = "micloud" },
     { name = "platformdirs" },
@@ -1521,6 +1522,7 @@ dev = [
 
 [package.metadata]
 requires-dist = [
+    { name = "cryptography", specifier = ">=41" },
     { name = "fastapi", specifier = ">=0.135.2" },
     { name = "mcp", marker = "extra == 'mcp'", specifier = ">=1.0" },
     { name = "micloud", specifier = ">=0.5" },

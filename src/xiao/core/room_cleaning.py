@@ -281,6 +281,10 @@ def known_rooms(vac: Any | None, aliases: dict[str, str]) -> list[dict[str, Any]
     Room IDs are per-map, so nothing here is hard-coded.
 
     Returns ``[{"id": int, "name": str, "sources": [...]}, ...]`` sorted by id.
+    When the robot's map is available, entries also carry ``map_name`` (the name
+    set in the Mi Home app, or None for unnamed rooms), ``alias_differs`` (an alias
+    overrides a different map name) and ``on_map`` (False for IDs that only exist
+    in schedules/aliases, e.g. after the map was rebuilt).
     """
     rooms: dict[int, dict[str, Any]] = {}
 
@@ -294,6 +298,8 @@ def known_rooms(vac: Any | None, aliases: dict[str, str]) -> list[dict[str, Any]
             entry["sources"].append(source)
         if name and not entry["name"]:
             entry["name"] = str(name)
+        if source == "device":
+            entry["map_name"] = str(name) if name else None
 
     if vac is not None:
         try:
@@ -316,9 +322,15 @@ def known_rooms(vac: Any | None, aliases: dict[str, str]) -> list[dict[str, Any]
     for rid in aliases:
         add(rid, "alias")
 
+    have_map = any("device" in entry["sources"] for entry in rooms.values())
     result = []
     for room_id in sorted(rooms):
         entry = rooms[room_id]
-        entry["name"] = aliases.get(str(room_id)) or entry["name"] or f"Room {room_id}"
+        alias = aliases.get(str(room_id))
+        entry["name"] = alias or entry["name"] or f"Room {room_id}"
+        if have_map:
+            entry["on_map"] = "device" in entry["sources"]
+            map_name = entry.get("map_name")
+            entry["alias_differs"] = bool(alias and map_name and alias.casefold() != map_name.casefold())
         result.append(entry)
     return result

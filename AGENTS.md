@@ -53,7 +53,8 @@ instead of the managed profile.
 | `xiao settings water <level>` | Set mop water: `low` \| `medium` \| `high` | no arg → prints current |
 | `xiao settings volume <0-100>` | Set voice volume | no arg → prints current |
 | `xiao settings dnd on --start HH:MM --end HH:MM` / `off` | Do-not-disturb | no arg → prints current window |
-| `xiao map rooms` | List room IDs from the device room map + its schedules + aliases (run BEFORE any `clean -r`) | — |
+| `xiao map rooms` | List room IDs and names from the robot's own map (decrypted Dreame map) + schedules + aliases; warns when an alias contradicts the map (run BEFORE any `clean -r`) | — |
+| `xiao rooms unalias <id>` | Drop an alias so the map's name is used | — |
 | `xiao map show` | Show raw map metadata from the cloud | — |
 | `xiao rooms alias <id> "<name>"` | Create a friendly-name alias | — |
 | `xiao rooms rename <id-or-old-alias> "<new>"` | Rename | — |
