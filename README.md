@@ -255,13 +255,14 @@ xiao clean --speed turbo -r 8     # Turbo clean Kitchen
 xiao clean -r 3 -w high           # Living Room with high water (heavy mop)
 ```
 
-> **Room cleaning goes over your LAN.** The X20+ is Dreame-built: through the
-> Xiaomi cloud it answers the room-clean action with `code 0` and then ignores
-> it. `xiao` therefore sends the Dreame `start-clean` command (work mode 18) to
-> the robot directly over miIO, using the device token from `config.toml` and the
-> LAN IP the cloud reports. The machine running `xiao` must be on the same
-> network as the robot; if it can't reach it, `xiao` falls back to the cloud
-> action and warns that the robot may ignore it.
+> **How room cleaning reaches the X20+.** The X20+ is Dreame-built. It answers
+> the spec's room-clean action with `code 0` and then ignores it. It obeys
+> Dreame's `start-clean` (work mode 18 + a room selection), which the published
+> spec doesn't declare, so `/miotspec/action` rejects it. `xiao` sends it the way
+> the Mi Home app does: through the Xiaomi cloud's RPC passthrough
+> (`/home/rpc/<did>`). That works even when the robot is unreachable on the LAN
+> (it stops answering there after a while in the dock). Only when the cloud call
+> fails does `xiao` try the LAN (miIO, device token from `config.toml`).
 >
 > If the robot is drying its mop, `xiao` stops the drying before starting any
 > clean (rooms, zones or the whole house), like the Mi Home app does. While
@@ -309,7 +310,7 @@ x1,y1,x2,y2
  left    right
 ```
 
-On the X20+ (a Dreame-built map) `(0,0)` is near where the map was started, usually the dock, and coordinates can be negative. The easiest way to get real numbers is to draw a zone once inside the Xiaomi Home app and copy them. Like rooms, zones are sent over the LAN (Dreame `start-clean`, work mode 19); there is no cloud fallback.
+On the X20+ (a Dreame-built map) `(0,0)` is near where the map was started, usually the dock, and coordinates can be negative. The easiest way to get real numbers is to draw a zone once inside the Xiaomi Home app and copy them. Like rooms, zones use Dreame `start-clean` (work mode 19) through the cloud RPC passthrough; they never fall back to `start-sweep`, which would clean the whole house.
 
 ```bash
 # Single zone
@@ -621,7 +622,7 @@ The X20+ cloud API exposes no room list, so xiao collects room IDs from the devi
 Some MIoT properties are only writable while the robot is off the dock. Start a clean first, or pass `--speed` inline on the `clean` command.
 
 **WashingMopPause (state 21)**
-This is the official X20+ state name: the robot paused its job because the clean-water tank needs a refill or the dirty-water tank needs emptying. The robot can't detect that you did it. In the Mi Home app you confirm it, and `xiao` does the same: `xiao start` (or ▶️ in Apple Home, or «Aspiradora continúa» with Siri) sends Dreame's start-washing confirmation (siid 4, aiid 4, `"1,1"`) over the LAN, and the robot washes the mop and resumes the paused job. New room/zone jobs are refused while it's paused (HTTP 409). If the robot still sits in state 21, press the physical play button on the top of the robot.
+This is the official X20+ state name: the robot paused its job because the clean-water tank needs a refill or the dirty-water tank needs emptying. The robot can't detect that you did it. In the Mi Home app you confirm it, and `xiao` does the same: `xiao start` (or ▶️ in Apple Home, or «Aspiradora continúa» with Siri) sends Dreame's start-washing confirmation (siid 4, aiid 4, `"1,1"`) through the cloud RPC passthrough, and the robot washes the mop and resumes the paused job. New room/zone jobs are refused while it's paused (HTTP 409). If the robot still sits in state 21, press the physical play button on the top of the robot.
 
 ---
 

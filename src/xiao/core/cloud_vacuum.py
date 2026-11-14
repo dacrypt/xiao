@@ -135,7 +135,7 @@ class CloudVacuumService:
         self.did = did
         self.model = model
         self.country = country
-        # Room/zone cleaning on the X20+ only works over the LAN (see clean_rooms_local).
+        # LAN (miIO) fallback for Dreame actions when the cloud RPC fails (see _dreame_action).
         self.local_token = local_token or None
         self.local_ip = local_ip or None
         self._local_device: Any = None
@@ -186,21 +186,11 @@ class CloudVacuumService:
         """Leave state 21 (washing paused for water) and continue the paused job.
 
         This is the Mi Home app's "water refilled / dirty tank emptied" confirmation:
-        Dreame's start-washing action (siid 4, aiid 4) with ``"1,1"`` in piid 10, sent
-        over the LAN (the published c102gl spec doesn't declare it, so the cloud
-        rejects it). The robot washes the mop and carries on with the job.
+        Dreame's start-washing action (siid 4, aiid 4) with ``"1,1"`` in piid 10. The
+        published c102gl spec doesn't declare it, so it goes through the cloud RPC
+        passthrough (see ``_dreame_action``). The robot washes the mop and resumes.
         """
-        device = self._local()
-        try:
-            result = device.send(
-                "action",
-                {"did": "resume-after-refill", "siid": 4, "aiid": 4, "in": [{"piid": 10, "value": "1,1"}]},
-                retry_count=0,
-            )
-        except Exception:
-            self._local_device = None
-            raise
-        reply = result if isinstance(result, dict) else {"code": 0, "result": result}
+        reply = self._dreame_action(4, 4, [{"piid": 10, "value": "1,1"}])
         return {**reply, "resumed": True}
 
     def ensure_not_waiting_for_water(self) -> None:
@@ -380,20 +370,13 @@ class CloudVacuumService:
         )
 
     def clean_zone(self, zones: list[list[int]], repeat: int = 1) -> dict:
-        """Start zone cleaning over the LAN (Dreame start-clean, work mode 19).
+        """Start zone cleaning (Dreame start-clean, work mode 19).
 
-        There is no cloud fallback: the cloud zone payload this used to send
-        landed on start-sweep and launched a full-house clean instead.
-        Fan and water come from the robot's current settings.
+        Never falls back to start-sweep: the zone payload this used to send there
+        launched a full-house clean instead. Fan and water come from the robot's
+        current settings.
         """
-        from xiao.core.room_cleaning import LocalUnreachableError
-
-        try:
-            return self.clean_zone_local(zones, repeat=repeat)
-        except LocalUnreachableError as e:
-            raise RuntimeError(
-                f"Zone cleaning needs the LAN path to the vacuum: {e}. Run xiao from a machine on the robot's network."
-            ) from e
+        return self.clean_zone_areas(zones, repeat=repeat)
 
     def spot_clean(self) -> dict:
         """Spot cleaning is not exposed by the c102gl cloud spec.
@@ -1109,14 +1092,14 @@ class CloudVacuumService:
             pass
         return data
 
-    # ── Room / zone cleaning over the LAN (Dreame start-clean) ────
+    # ── Room / zone cleaning (Dreame start-clean) ─────────────────
     #
-    # The X20+ is Dreame-built. Through the cloud it acknowledges the spec's
-    # start-room-sweep (2/3) with code 0 and then ignores it, and the cloud
-    # rejects the Dreame start-clean (4/1) payload because the published spec
-    # only declares piid 10 (-704220025). Sent over the local miIO protocol, the
-    # robot accepts start-clean with piid 1 = work mode (18 rooms, 19 zones) and
-    # piid 10 = the selection, exactly like the Mi Home app.
+    # The X20+ is Dreame-built. It acknowledges the spec's start-room-sweep (2/3)
+    # with code 0 and then ignores it. It obeys Dreame's start-clean (4/1) with
+    # piid 1 = work mode (18 rooms, 19 zones) and piid 10 = the selection, like the
+    # Mi Home app. /miotspec/action rejects that payload (the published spec only
+    # declares piid 10), so it goes through the cloud RPC passthrough, with the LAN
+    # (miIO) as a fallback; see _dreame_action.
 
     LAN_HANDSHAKE_ATTEMPTS = 5
     LAN_HANDSHAKE_BACKOFF_SECONDS = 1.5
@@ -1125,8 +1108,8 @@ class CloudVacuumService:
     DREAME_WORK_MODE_ZONES = 19
 
     @property
-    def local_clean_available(self) -> bool:
-        return bool(self.local_token)
+    def segment_clean_available(self) -> bool:
+        return True
 
     def _local(self) -> Any:
         from xiao.core.room_cleaning import LocalUnreachableError
@@ -1191,49 +1174,70 @@ class CloudVacuumService:
             self.WATER_LEVELS[water.lower()] if water else current_water,
         )
 
-    def start_clean_local(self, work_mode: int, data: dict[str, Any]) -> dict:
-        """Send Dreame start-clean (siid 4, aiid 1) over the LAN. Returns the raw device reply."""
-        device = self._local()
-        payload = json.dumps(data, separators=(",", ":"))
-        try:
-            # retry_count=0: python-miio re-sends on a lost UDP reply, which would
-            # restart the job; a lost reply surfaces as an error instead.
-            result = device.send(
-                "action",
-                {
-                    "did": f"call-4-1-{work_mode}",
-                    "siid": 4,
-                    "aiid": 1,
-                    "in": [{"piid": 1, "value": work_mode}, {"piid": 10, "value": payload}],
-                },
-                retry_count=0,
-            )
-        except Exception:
-            self._local_device = None  # re-resolve the IP next time (DHCP may have moved it)
-            raise
-        return result if isinstance(result, dict) else {"code": 0, "result": result}
+    def _dreame_action(self, siid: int, aiid: int, params: list[dict[str, Any]]) -> dict:
+        """Send a Dreame action the published c102gl spec doesn't declare.
 
-    def clean_rooms_local(
+        ``/miotspec/action`` validates inputs against the spec and rejects these
+        (-704220025). The Mi Home app uses the cloud RPC passthrough
+        (``/home/rpc/<did>``, method ``action``), which forwards them to the robot
+        as-is and works even when the robot is unreachable on the LAN (Wi-Fi power
+        saving). The LAN (miIO) is only a fallback when the cloud call fails.
+        Returns ``{"code": <robot's code>, "result": ..., "transport": "cloud" | "lan"}``.
+        """
+        from xiao.core.cloud import cloud_rpc
+
+        try:
+            reply = cloud_rpc(
+                self.cloud,
+                self.did,
+                "action",
+                {"did": f"{siid}.{aiid}", "siid": siid, "aiid": aiid, "in": params},
+                country=self.country,
+            )
+        except Exception as cloud_error:
+            logger.info("cloud RPC failed (%s); trying the LAN", cloud_error)
+            device = self._local()
+            try:
+                # retry_count=0: python-miio re-sends on a lost UDP reply, which would
+                # restart the job; a lost reply surfaces as an error instead.
+                result = device.send(
+                    "action", {"did": f"{siid}.{aiid}", "siid": siid, "aiid": aiid, "in": params}, retry_count=0
+                )
+            except Exception:
+                self._local_device = None  # re-resolve the IP next time (DHCP may have moved it)
+                raise
+            code = result.get("code", 0) if isinstance(result, dict) else 0
+            return {"code": code, "result": result, "transport": "lan"}
+        inner = reply.get("result") if isinstance(reply, dict) else None
+        code = inner.get("code", 0) if isinstance(inner, dict) else reply.get("code", -1)
+        if reply.get("code", 0) != 0:
+            code = reply["code"]
+        return {"code": code, "result": reply, "transport": "cloud"}
+
+    def start_clean(self, work_mode: int, data: dict[str, Any]) -> dict:
+        """Dreame start-clean (siid 4, aiid 1): piid 1 = work mode, piid 10 = the selection."""
+        payload = json.dumps(data, separators=(",", ":"))
+        return self._dreame_action(4, 1, [{"piid": 1, "value": work_mode}, {"piid": 10, "value": payload}])
+
+    def clean_rooms_segments(
         self, room_ids: list[int], repeat: int = 1, fan: str | None = None, water: str | None = None
     ) -> dict:
         """Clean rooms in order; fan/water default to the robot's current settings."""
-        self._local()  # fail fast (LocalUnreachableError) before any cloud reads
         self.ensure_not_waiting_for_water()
         self.cancel_drying()
         fan_raw, water_raw = self._resolve_fan_water(fan, water)
         selects = [[int(rid), max(1, repeat), fan_raw, water_raw, order] for order, rid in enumerate(room_ids, 1)]
-        return self.start_clean_local(self.DREAME_WORK_MODE_ROOMS, {"selects": selects})
+        return self.start_clean(self.DREAME_WORK_MODE_ROOMS, {"selects": selects})
 
-    def clean_zone_local(
+    def clean_zone_areas(
         self, zones: list[list[int]], repeat: int = 1, fan: str | None = None, water: str | None = None
     ) -> dict:
         """Clean rectangles ``[x1, y1, x2, y2]`` (map mm)."""
-        self._local()
         self.ensure_not_waiting_for_water()
         self.cancel_drying()
         fan_raw, water_raw = self._resolve_fan_water(fan, water)
         areas = [[*zone, max(1, repeat), fan_raw, water_raw] for zone in zones]
-        return self.start_clean_local(self.DREAME_WORK_MODE_ZONES, {"areas": areas})
+        return self.start_clean(self.DREAME_WORK_MODE_ZONES, {"areas": areas})
 
     # ── Room-specific cleaning (MIoT action) ──────────────────────
 

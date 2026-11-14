@@ -1,4 +1,8 @@
-"""LAN (Dreame start-clean) room/zone cleaning for the X20+."""
+"""Dreame start-clean room/zone cleaning for the X20+: cloud RPC first, LAN fallback.
+
+Most tests here exercise the payload through the LAN fallback (the autouse
+fixture makes the cloud RPC fail); TestCloudRpcFirst covers the cloud route.
+"""
 
 import json
 from unittest.mock import MagicMock, patch
@@ -7,6 +11,14 @@ import pytest
 
 from xiao.core.cloud_vacuum import CloudVacuumService
 from xiao.core.room_cleaning import LocalUnreachableError, WaitingForWaterError, start_room_clean
+
+
+@pytest.fixture(autouse=True)
+def _cloud_rpc_unavailable(monkeypatch):
+    def fail(*_args, **_kwargs):
+        raise ConnectionError("cloud unreachable in this test")
+
+    monkeypatch.setattr("xiao.core.cloud.cloud_rpc", fail)
 
 
 def _service(**kwargs) -> CloudVacuumService:
@@ -50,7 +62,7 @@ class TestCloudVacuumLocalClean:
         device.send.return_value = {"code": 0, "out": []}
         svc._local_device = device
 
-        result = svc.clean_rooms_local([8, 3], repeat=2, fan="turbo", water="high")
+        result = svc.clean_rooms_segments([8, 3], repeat=2, fan="turbo", water="high")
 
         assert result["code"] == 0
         mode, data = _sent_payload(device)
@@ -64,25 +76,25 @@ class TestCloudVacuumLocalClean:
             "xiao.core.cloud_vacuum.cloud_get_properties",
             return_value=[{"siid": 2, "piid": 3, "value": 0, "code": 0}, {"siid": 4, "piid": 5, "value": 1, "code": 0}],
         ):
-            svc.clean_rooms_local([8])
+            svc.clean_rooms_segments([8])
         assert _sent_payload(svc._local_device)[1] == {"selects": [[8, 1, 0, 1, 1]]}
 
     def test_zones_use_zone_mode_with_areas(self):
         svc = _service(local_token="t")
         svc._local_device = MagicMock(send=MagicMock(return_value={"code": 0}))
-        svc.clean_zone_local([[0, 0, 1000, 500]], fan="silent", water="low")
+        svc.clean_zone_areas([[0, 0, 1000, 500]], fan="silent", water="low")
         assert _sent_payload(svc._local_device) == (19, {"areas": [[0, 0, 1000, 500, 1, 0, 1]]})
 
     def test_rejects_unknown_fan(self):
         svc = _service(local_token="t")
         svc._local_device = MagicMock()
         with pytest.raises(ValueError, match="Unknown speed"):
-            svc.clean_rooms_local([8], fan="ludicrous", water="low")
+            svc.clean_rooms_segments([8], fan="ludicrous", water="low")
         svc._local_device.send.assert_not_called()
 
-    def test_without_token_the_lan_path_is_unavailable(self):
+    def test_without_token_the_lan_fallback_is_unavailable(self):
         svc = _service()
-        assert svc.local_clean_available is False
+        assert svc.segment_clean_available is True  # the cloud RPC route needs no token
         with pytest.raises(LocalUnreachableError):
             svc._local()
 
@@ -98,9 +110,9 @@ class TestCloudVacuumLocalClean:
 
 def _room_vac(**overrides) -> MagicMock:
     vac = MagicMock()
-    vac.local_clean_available = True
+    vac.segment_clean_available = True
     vac.status.side_effect = [{"state": "Charging Completed"}, {"state": "Washing mop"}]
-    vac.clean_rooms_local.return_value = {"code": 0}
+    vac.clean_rooms_segments.return_value = {"code": 0}
     for key, value in overrides.items():
         setattr(vac, key, value)
     return vac
@@ -111,7 +123,7 @@ class TestStartRoomCleanTransport:
         vac = _room_vac()
         result = start_room_clean(vac, [8], repeat=2, fan="turbo", water="high", sleep_fn=lambda _s: None)
 
-        vac.clean_rooms_local.assert_called_once_with([8], repeat=2, fan="turbo", water="high")
+        vac.clean_rooms_segments.assert_called_once_with([8], repeat=2, fan="turbo", water="high")
         vac.clean_rooms_miot.assert_not_called()
         assert result["transport"] == "local"
         assert result["verified_started"] is True
@@ -119,7 +131,7 @@ class TestStartRoomCleanTransport:
 
     def test_falls_back_to_cloud_with_a_warning_when_lan_is_unreachable(self):
         vac = _room_vac()
-        vac.clean_rooms_local.side_effect = LocalUnreachableError("no route")
+        vac.clean_rooms_segments.side_effect = LocalUnreachableError("no route")
         vac.clean_rooms_miot.return_value = {"code": 0}
 
         result = start_room_clean(vac, [8], sleep_fn=lambda _s: None)
@@ -129,7 +141,7 @@ class TestStartRoomCleanTransport:
 
     def test_lan_errors_after_sending_are_not_retried_on_the_cloud(self):
         vac = _room_vac()
-        vac.clean_rooms_local.side_effect = TimeoutError("ack lost")
+        vac.clean_rooms_segments.side_effect = TimeoutError("ack lost")
         with pytest.raises(TimeoutError):
             start_room_clean(vac, [8], sleep_fn=lambda _s: None)
         vac.clean_rooms_miot.assert_not_called()
@@ -147,14 +159,14 @@ class TestCloudZoneClean:
         assert _sent_payload(svc._local_device) == (19, {"areas": [[0, 0, 10, 10, 2, 1, 2]]})
 
     def test_clean_zone_never_falls_back_to_a_full_house_clean(self):
-        svc = _service()
+        svc = _service()  # cloud RPC fails (fixture) and there is no LAN token
+        svc.status = MagicMock(return_value={"state": "Charging Completed"})
         with (
-            patch("xiao.core.cloud.cloud_rpc") as rpc,
             patch("xiao.core.cloud_vacuum.cloud_call_action") as action,
-            pytest.raises(RuntimeError, match="LAN path"),
+            patch("xiao.core.cloud_vacuum.cloud_get_properties", return_value=[]),
+            pytest.raises(LocalUnreachableError),
         ):
-            svc.clean_zone([[0, 0, 10, 10]])
-        rpc.assert_not_called()
+            svc.clean_zone([[0, 0, 10, 10]], repeat=1)
         action.assert_not_called()
 
 
@@ -186,8 +198,8 @@ class TestCancelDrying:
         calls = []
         svc._local_device = MagicMock(send=MagicMock(side_effect=lambda *a, **k: calls.append("send") or {"code": 0}))
         svc.cancel_drying = MagicMock(side_effect=lambda: calls.append("cancel") or True)
-        svc.clean_rooms_local([8], fan="turbo", water="high")
-        svc.clean_zone_local([[0, 0, 10, 10]], fan="turbo", water="high")
+        svc.clean_rooms_segments([8], fan="turbo", water="high")
+        svc.clean_zone_areas([[0, 0, 10, 10]], fan="turbo", water="high")
         assert calls == ["cancel", "send", "cancel", "send"]
 
     def test_full_start_cancels_drying_first(self):
@@ -208,7 +220,7 @@ class TestLocalSendSafety:
         device.send.side_effect = OSError("no reply")
         svc._local_device = device
         with pytest.raises(OSError):
-            svc.start_clean_local(18, {"selects": []})
+            svc.start_clean(18, {"selects": []})
         assert device.send.call_args.kwargs == {"retry_count": 0}
         assert svc._local_device is None
 
@@ -245,7 +257,50 @@ class TestWaterPause:
         svc.status = MagicMock(return_value={"state": "WashingMopPause"})
         svc._local_device = MagicMock()
         with pytest.raises(WaitingForWaterError, match="state 21"):
-            svc.clean_rooms_local([8], fan="turbo", water="high")
+            svc.clean_rooms_segments([8], fan="turbo", water="high")
         with pytest.raises(WaitingForWaterError):
-            svc.clean_zone_local([[0, 0, 10, 10]], fan="turbo", water="high")
+            svc.clean_zone_areas([[0, 0, 10, 10]], fan="turbo", water="high")
         svc._local_device.send.assert_not_called()
+
+
+class TestCloudRpcFirst:
+    def _svc(self):
+        svc = _service(local_token="t")
+        svc.status = MagicMock(return_value={"state": "Charging Completed"})
+        svc._local_device = MagicMock()
+        return svc
+
+    def test_room_clean_goes_through_the_cloud_rpc_passthrough(self):
+        svc = self._svc()
+        reply = {"code": 0, "message": "ok", "result": {"siid": 4, "aiid": 1, "code": 0, "out": []}}
+        with patch("xiao.core.cloud.cloud_rpc", return_value=reply) as rpc:
+            result = svc.clean_rooms_segments([13], fan="standard", water="medium")
+        method, params = rpc.call_args.args[2], rpc.call_args.args[3]
+        assert method == "action"
+        assert (params["siid"], params["aiid"]) == (4, 1)
+        assert params["in"][0] == {"piid": 1, "value": 18}
+        assert json.loads(params["in"][1]["value"]) == {"selects": [[13, 1, 1, 2, 1]]}
+        assert result["code"] == 0
+        assert result["transport"] == "cloud"
+        svc._local_device.send.assert_not_called()
+
+    def test_a_robot_rejection_is_reported_and_not_resent_over_the_lan(self):
+        svc = self._svc()
+        reply = {"code": 0, "message": "ok", "result": {"siid": 4, "aiid": 1, "code": -4001}}
+        with patch("xiao.core.cloud.cloud_rpc", return_value=reply):
+            result = svc.clean_zone_areas([[0, 0, 10, 10]], fan="turbo", water="high")
+        assert result["code"] == -4001
+        svc._local_device.send.assert_not_called()
+
+    def test_cloud_level_errors_are_reported(self):
+        svc = self._svc()
+        with patch("xiao.core.cloud.cloud_rpc", return_value={"code": -8, "message": "data type not valid"}):
+            assert svc.clean_rooms_segments([13], fan="standard", water="low")["code"] == -8
+
+    def test_resume_after_refill_uses_the_cloud_rpc(self):
+        svc = self._svc()
+        with patch("xiao.core.cloud.cloud_rpc", return_value={"code": 0, "result": {"code": 0}}) as rpc:
+            result = svc.resume_after_refill()
+        params = rpc.call_args.args[3]
+        assert (params["siid"], params["aiid"], params["in"]) == (4, 4, [{"piid": 10, "value": "1,1"}])
+        assert result["resumed"] is True
