@@ -122,9 +122,9 @@ def start_room_clean(
     before_state = _status_state(status_before)
     fallback_warning: str | None = None
 
-    if getattr(vac, "local_clean_available", False) is True:
+    if getattr(vac, "segment_clean_available", False) is True:
         try:
-            result = vac.clean_rooms_local(room_ids, repeat=repeat, fan=fan, water=water)
+            result = vac.clean_rooms_segments(room_ids, repeat=repeat, fan=fan, water=water)
         except LocalUnreachableError as e:
             fallback_warning = (
                 f"LAN path unavailable ({e}); fell back to the cloud room action, which the X20+ may ignore."
