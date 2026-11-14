@@ -8,7 +8,7 @@ from rich.console import Console
 from rich.markup import escape
 from rich.table import Table
 
-from xiao.core.config import get_rooms, is_configured, resolve_room, set_room_alias
+from xiao.core.config import get_rooms, is_configured, remove_room_alias, resolve_room, set_room_alias
 
 app = typer.Typer(no_args_is_help=False)
 console = Console()
@@ -32,6 +32,19 @@ def render_known_rooms(rooms: list[dict]) -> None:
         table.add_row(str(room["id"]), escape(room["name"]), ", ".join(room["sources"]))
     console.print(table)
 
+    differs = [r for r in rooms if r.get("alias_differs")]
+    if differs:
+        rprint("\n[yellow]⚠ These aliases contradict the names on the robot's map:[/yellow]")
+        for r in differs:
+            rprint(
+                f'  {r["id"]}: alias "{escape(r["name"])}" ≠ map "{escape(r["map_name"])}"  → xiao rooms unalias {r["id"]}'
+            )
+    stale = [r for r in rooms if r.get("on_map") is False]
+    if stale:
+        ids = ", ".join(str(r["id"]) for r in stale)
+        rprint(f"\n[yellow]⚠ Not on the robot's map (old schedule or alias?):[/yellow] {ids}")
+    if any("device" in r["sources"] for r in rooms):
+        return
     unaliased = [r for r in rooms if "alias" not in r["sources"]]
     if unaliased:
         rprint(f'\n[yellow]Tip:[/yellow] {len(unaliased)} rooms without aliases. Use: xiao rooms alias <id> "Name"')
@@ -61,6 +74,15 @@ def alias(
     """Set an alias for a room ID."""
     set_room_alias(room_id, name)
     rprint(f'[green]✓ Room {room_id} → "{name}"[/green]')
+
+
+@app.command()
+def unalias(room_id: int = typer.Argument(help="Room ID")):
+    """Remove a room alias, so the name from the robot's map is used."""
+    if remove_room_alias(room_id):
+        rprint(f"[green]✓ Alias for room {room_id} removed[/green]")
+    else:
+        rprint(f"[dim]Room {room_id} had no alias[/dim]")
 
 
 @app.command("rename")

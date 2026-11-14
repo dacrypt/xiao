@@ -52,13 +52,22 @@ def export(
     POST /api/voice on `xiao web` and Siri reads back the answer. `xiao web`
     must listen on the network (`--host 0.0.0.0`); the files embed its token.
     """
+    from xiao.cli.app import _vacuum
     from xiao.core.config import ensure_web_token, get_rooms
+    from xiao.core.room_cleaning import known_rooms
     from xiao.core.shortcuts import default_specs, write_shortcuts
 
     if lang not in ("es", "en"):
         err_console.print("[red]✗ --lang must be es or en[/red]")
         raise typer.Exit(EXIT_GENERIC)
-    rooms = get_rooms()
+    # Room IDs and names from the robot's map (aliases override names); rooms
+    # that are no longer on the map, or still unnamed, get no shortcut.
+    aliases = get_rooms()
+    rooms = {
+        str(r["id"]): r["name"]
+        for r in known_rooms(_vacuum(), aliases)
+        if r.get("on_map", True) and (str(r["id"]) in aliases or r.get("map_name") or "device" not in r["sources"])
+    }
     if not rooms:
         err_console.print('[red]✗ No room names yet. Run `xiao map rooms` and `xiao rooms alias <id> "<name>"`.[/red]')
         raise typer.Exit(EXIT_GENERIC)

@@ -641,11 +641,80 @@ class CloudVacuumService:
 
     # ── Rooms / Map ───────────────────────────────────────────────
 
+    MAP_ROOMS_TTL_SECONDS = 600
+
+    def _map_object(self) -> tuple[str, str | None] | None:
+        """Latest map object name (and AES key) the robot pushed to the cloud (siid 6, piid 3)."""
+        import time
+
+        now = int(time.time())
+        payload = {
+            "data": json.dumps(
+                {
+                    "did": self.did,
+                    "key": "6.3",
+                    "type": "prop",
+                    "time_start": now - 90 * 86400,
+                    "time_end": now + 60,
+                    "limit": 1,
+                }
+            )
+        }
+        reply = json.loads(
+            self.cloud._signed_request(self.cloud._api_url(self.country) + "/user/get_user_device_data", payload)
+        )
+        history = reply.get("result") or []
+        if not history:
+            return None
+        value = json.loads(history[0].get("value") or "[]")
+        if not value:
+            return None
+        obj, _, key = str(value[0]).partition(",")
+        return obj, key or None
+
+    def map_rooms(self) -> list[dict[str, Any]]:
+        """Rooms (segment id + name) decoded from the robot's saved map. Cached for 10 minutes."""
+        import time
+
+        import requests
+
+        from xiao.core.dreame_map import rooms_from_map_file
+
+        cached = getattr(self, "_map_rooms_cache", None)
+        if cached and time.monotonic() - cached[0] < self.MAP_ROOMS_TTL_SECONDS:
+            return cached[1]
+        found = self._map_object()
+        if not found:
+            return []
+        obj, key = found
+        api = self.cloud._api_url(self.country)
+        url = None
+        for endpoint in ("/v2/home/get_interim_file_url", "/v2/home/get_interim_file_url_pro"):
+            reply = json.loads(self.cloud._signed_request(api + endpoint, {"data": json.dumps({"obj_name": obj})}))
+            url = (reply.get("result") or {}).get("url")
+            if url:
+                break
+        if not url:
+            return []
+        response = requests.get(url, timeout=30)
+        response.raise_for_status()
+        rooms = rooms_from_map_file(response.text, key, self.model or "xiaomi.vacuum.c102gl")
+        self._map_rooms_cache = (time.monotonic(), rooms)
+        return rooms
+
     def rooms(self) -> list:
-        """Get room list. Cloud doesn't expose a direct room list endpoint
-        for all models, so we return what we can via RPC."""
+        """Room list from the robot's own map (IDs and the names set in the Mi Home app).
+
+        Falls back to the legacy ``get_room_mapping`` RPC, which the X20+ doesn't answer.
+        """
         from xiao.core.cloud import cloud_rpc
 
+        try:
+            rooms = self.map_rooms()
+            if rooms:
+                return rooms
+        except Exception as e:
+            logger.debug("could not read rooms from the map: %s", e)
         try:
             result = cloud_rpc(
                 self.cloud,

@@ -175,6 +175,16 @@ def _fold(text: str) -> str:
     return "".join(c for c in decomposed if not unicodedata.combining(c))
 
 
+def remove_room_alias(room_id: int) -> bool:
+    """Remove a room alias; returns False when there was none."""
+    cfg = load()
+    if str(room_id) not in cfg.get("rooms", {}):
+        return False
+    del cfg["rooms"][str(room_id)]
+    save(cfg)
+    return True
+
+
 def resolve_room(identifier: str) -> int:
     """Resolve a room name or ID to a numeric room ID."""
     # Try as integer first

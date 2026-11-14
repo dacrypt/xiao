@@ -127,8 +127,16 @@ class TestKnownRooms:
         vac.schedules_parsed.return_value = [{"room_ids": [2, 4]}, {"raw": "x", "parse_error": True}]
         rooms = known_rooms(vac, {"4": "Office"})
         assert rooms == [
-            {"id": 2, "name": "Living", "sources": ["device", "schedule"]},
-            {"id": 4, "name": "Office", "sources": ["schedule", "alias"]},
+            {
+                "id": 2,
+                "name": "Living",
+                "sources": ["device", "schedule"],
+                "map_name": "Living",
+                "on_map": True,
+                "alias_differs": False,
+            },
+            # Only known from a schedule and an alias, not from the robot's map.
+            {"id": 4, "name": "Office", "sources": ["schedule", "alias"], "on_map": False, "alias_differs": False},
         ]
 
     def test_no_vacuum_and_no_aliases_is_empty(self):
